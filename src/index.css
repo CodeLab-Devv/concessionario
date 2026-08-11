@@ -226,6 +226,31 @@ body {
   background: #94a3b8;
 }
 
+/* Scrollbar compatta e rettangolare per le aree scrollabili dei modal */
+[role='dialog'] > div > div.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-gutter: stable;
+}
+
+[role='dialog'] > div > div.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+[role='dialog'] > div > div.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[role='dialog'] > div > div.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+  min-height: 36px;
+}
+
+[role='dialog'] > div > div.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* Focus personalizzato per accessibilità */
 .focus-automotive:focus {
   outline: none;
