@@ -1,0 +1,1 @@
+-- Il gestionale Aurum Motors gestisce esclusivamente l'attività del concessionario.

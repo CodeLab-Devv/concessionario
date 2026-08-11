@@ -1,0 +1,1 @@
+-- L'account proprietario viene creato attraverso la registrazione protetta dell'applicazione.
