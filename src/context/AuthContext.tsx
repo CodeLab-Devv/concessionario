@@ -17,6 +17,7 @@ interface UserProfileRow {
   last_service_status_change: string | null;
   created_at: string;
   avatar_url: string | null;
+  availability: string | null;
 }
 
 export const useAuth = () => {
@@ -100,7 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isOnService: data.is_on_service || false,
           lastServiceStatusChange: data.last_service_status_change,
           createdAt: data.created_at,
-          avatar_url: data.avatar_url
+          avatar_url: data.avatar_url,
+          availability: data.availability || undefined
         };
 
         setUser(userData);
@@ -290,7 +292,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isOnService: profile.is_on_service || false,
           lastServiceStatusChange: profile.last_service_status_change || undefined,
           createdAt: profile.created_at,
-          avatar_url: profile.avatar_url || undefined
+          avatar_url: profile.avatar_url || undefined,
+          availability: profile.availability || undefined
         };
       });
 
