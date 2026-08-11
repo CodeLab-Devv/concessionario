@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Moon, MoonStar, Plus, Save, Sun, Sunset, Trash2, UserRoundX, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Moon, MoonStar, Plus, Save, Sun, Sunset, Trash2, UserRoundX, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from './ui/NotificationManager';
@@ -8,24 +8,26 @@ import { Avatar } from './Avatar';
 interface UserRow { id: string; name: string; role: string; avatar_url?: string | null; employee_type?: string | null; }
 interface Shift { id: string; user_id: string; shift_date: string; start_time: string; end_time: string; notes: string | null; }
 interface Absence { id: string; user_id: string; absence_date: string; slot: Slot; start_time: string; end_time: string; note: string | null; created_by: string | null; }
-interface SiteNotification { id: string; recipient_id: string; type: string; title: string; message: string | null; data: Record<string, unknown>; read_at: string | null; created_at: string; }
 
-type Slot = 'mattino' | 'pomeriggio' | 'sera' | 'tarda_notte' | 'tutto_giorno';
+type WorkSlot = 'mattino' | 'pomeriggio' | 'sera' | 'tarda_notte';
+type Slot = WorkSlot | 'tutto_giorno';
+
 const HIGH_ROLES = ['owner', 'director', 'vice_director'];
-const ROLE_LABELS: Record<string, string> = { owner: 'Proprietario', director: 'Direttore', vice_director: 'Vice Direttore', employee: 'Dipendente', probation: 'In Prova' };
-const SLOTS: { key: Slot; label: string; subtitle: string; icon: React.ElementType; from: string; to: string }[] = [
-  { key: 'mattino', label: 'Mattino', subtitle: '06:00 — 12:00', icon: Sun, from: '06:00', to: '12:00' },
-  { key: 'pomeriggio', label: 'Pomeriggio', subtitle: '12:00 — 18:00', icon: Sunset, from: '12:00', to: '18:00' },
-  { key: 'sera', label: 'Sera', subtitle: '18:00 — 00:00', icon: Moon, from: '18:00', to: '00:00' },
-  { key: 'tarda_notte', label: 'Tarda notte', subtitle: '00:00 — 06:00', icon: MoonStar, from: '00:00', to: '06:00' },
-  { key: 'tutto_giorno', label: 'Tutto il giorno', subtitle: 'Assenza completa', icon: UserRoundX, from: '00:00', to: '23:59' },
+const ROLE_LABELS: Record<string, string> = { owner: 'Proprietario', director: 'Direttore', vice_director: 'Vice Direttore', employee: 'Dipendente', probation: 'In prova' };
+const SLOTS: Array<{ key: WorkSlot; label: string; time: string; from: string; to: string; icon: React.ElementType }> = [
+  { key: 'mattino', label: 'Mattino', time: '06:00 — 12:00', from: '06:00', to: '12:00', icon: Sun },
+  { key: 'pomeriggio', label: 'Pomeriggio', time: '12:00 — 18:00', from: '12:00', to: '18:00', icon: Sunset },
+  { key: 'sera', label: 'Sera', time: '18:00 — 00:00', from: '18:00', to: '00:00', icon: Moon },
+  { key: 'tarda_notte', label: 'Tarda notte', time: '00:00 — 06:00', from: '00:00', to: '06:00', icon: MoonStar },
 ];
+const ALL_DAY: { key: 'tutto_giorno'; label: string; time: string; from: string; to: string; icon: React.ElementType } = { key: 'tutto_giorno', label: 'Tutto il giorno', time: 'Assenza completa', from: '00:00', to: '23:59', icon: UserRoundX };
+
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
-const displayDate = (value: string) => new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${value}T12:00:00`));
+const displayDate = (value: string) => new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 const shortDate = (date: Date) => new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric' }).format(date);
 const normalizeTime = (value: string) => value.length === 5 ? `${value}:00` : value;
-const getSlot = (start: string): Exclude<Slot, 'tutto_giorno'> => { const h = Number(start.slice(0, 2)); if (h >= 6 && h < 12) return 'mattino'; if (h >= 12 && h < 18) return 'pomeriggio'; if (h >= 18) return 'sera'; return 'tarda_notte'; };
-const slotInfo = (key: Slot) => SLOTS.find(slot => slot.key === key)!;
+const getSlot = (start: string): WorkSlot => { const hour = Number(start.slice(0, 2)); if (hour >= 6 && hour < 12) return 'mattino'; if (hour >= 12 && hour < 18) return 'pomeriggio'; if (hour >= 18) return 'sera'; return 'tarda_notte'; };
+const getSlotInfo = (key: Slot) => key === 'tutto_giorno' ? ALL_DAY : SLOTS.find(slot => slot.key === key)!;
 
 export const ShiftsPage: React.FC = () => {
   const { user } = useAuth();
@@ -40,38 +42,64 @@ export const ShiftsPage: React.FC = () => {
   const [editor, setEditor] = useState<'shift' | 'absence' | null>(null);
   const [editingIds, setEditingIds] = useState<string[]>([]);
   const [editingAbsenceId, setEditingAbsenceId] = useState<string | null>(null);
-  const [form, setForm] = useState({ slot: 'mattino' as Exclude<Slot, 'tutto_giorno'>, userIds: ['', ''], start: '06:00', end: '12:00', notes: '' });
+  const [form, setForm] = useState({ slot: 'mattino' as WorkSlot, userIds: ['', ''], notes: '' });
   const [absenceForm, setAbsenceForm] = useState({ slot: 'mattino' as Slot, note: '' });
 
-  const weekDates = useMemo(() => { const current = new Date(`${selectedDate}T12:00:00`); const day = current.getDay() || 7; current.setDate(current.getDate() - day + 1); return Array.from({ length: 7 }, (_, index) => { const date = new Date(current); date.setDate(current.getDate() + index); return date; }); }, [selectedDate]);
+  const weekDates = useMemo(() => {
+    const current = new Date(`${selectedDate}T12:00:00`);
+    const day = current.getDay() || 7;
+    current.setDate(current.getDate() - day + 1);
+    return Array.from({ length: 7 }, (_, index) => { const date = new Date(current); date.setDate(current.getDate() + index); return date; });
+  }, [selectedDate]);
+
   const userMap = useMemo(() => new Map(users.map(item => [item.id, item])), [users]);
+  const shiftsBySlot = useMemo(() => {
+    const map = new Map<WorkSlot, Shift[]>();
+    SLOTS.forEach(slot => map.set(slot.key, []));
+    shifts.forEach(shift => map.get(getSlot(shift.start_time))?.push(shift));
+    map.forEach(rows => rows.sort((a, b) => a.user_id.localeCompare(b.user_id)));
+    return map;
+  }, [shifts]);
+  const absencesBySlot = useMemo(() => {
+    const map = new Map<Slot, Absence[]>();
+    [...SLOTS.map(item => item.key), 'tutto_giorno' as const].forEach(slot => map.set(slot, []));
+    absences.forEach(absence => {
+      if (absence.slot === 'tutto_giorno') SLOTS.forEach(slot => map.get(slot.key)?.push(absence));
+      else map.get(absence.slot)?.push(absence);
+    });
+    return map;
+  }, [absences]);
 
   const load = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
     const [{ data: usersData, error: usersError }, { data: shiftsData, error: shiftsError }, { data: absencesData, error: absencesError }] = await Promise.all([
       supabase.from('users').select('id,name,role,avatar_url,employee_type').order('name'),
       supabase.from('daily_shifts').select('id,user_id,shift_date,start_time,end_time,notes').eq('shift_date', selectedDate).order('start_time'),
-      supabase.from('shift_absences').select('id,user_id,absence_date,slot,start_time,end_time,note,created_by').eq('absence_date', selectedDate).order('start_time')
+      supabase.from('shift_absences').select('id,user_id,absence_date,slot,start_time,end_time,note,created_by').eq('absence_date', selectedDate).order('start_time'),
     ]);
     if (usersError) console.error('Errore caricamento dipendenti:', usersError);
     if (shiftsError) console.error('Errore caricamento turni:', shiftsError);
     if (absencesError) console.error('Errore caricamento assenze:', absencesError);
-    setUsers(usersData || []); setShifts(shiftsData || []); setAbsences(absencesData || []); setLoading(false);
-  }, [selectedDate]);
+    setUsers(usersData || []);
+    setShifts((shiftsData || []) as Shift[]);
+    setAbsences((absencesData || []) as Absence[]);
+    setLoading(false);
+  }, [selectedDate, user?.id]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     let active = true;
-    const channel = supabase.channel(`shifts-realtime-${selectedDate}`)
+    const channel = supabase.channel(`shifts-${selectedDate}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_shifts' }, payload => {
         if (!active) return;
         if (payload.eventType === 'INSERT') {
           const row = payload.new as Shift;
-          if (row.shift_date === selectedDate) setShifts(current => current.some(item => item.id === row.id) ? current : [...current, row].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+          if (row.shift_date === selectedDate) setShifts(current => current.some(item => item.id === row.id) ? current : [...current, row]);
         } else if (payload.eventType === 'UPDATE') {
           const row = payload.new as Shift;
-          setShifts(current => row.shift_date === selectedDate ? current.some(item => item.id === row.id) ? current.map(item => item.id === row.id ? row : item).sort((a, b) => a.start_time.localeCompare(b.start_time)) : [...current, row].sort((a, b) => a.start_time.localeCompare(b.start_time)) : current.filter(item => item.id !== row.id));
+          setShifts(current => row.shift_date === selectedDate ? current.some(item => item.id === row.id) ? current.map(item => item.id === row.id ? row : item) : [...current, row] : current.filter(item => item.id !== row.id));
         } else if (payload.eventType === 'DELETE') {
           const row = payload.old as Partial<Shift>;
           setShifts(current => current.filter(item => item.id !== row.id));
@@ -81,10 +109,10 @@ export const ShiftsPage: React.FC = () => {
         if (!active) return;
         if (payload.eventType === 'INSERT') {
           const row = payload.new as Absence;
-          if (row.absence_date === selectedDate) setAbsences(current => current.some(item => item.id === row.id) ? current : [...current, row].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+          if (row.absence_date === selectedDate) setAbsences(current => current.some(item => item.id === row.id) ? current : [...current, row]);
         } else if (payload.eventType === 'UPDATE') {
           const row = payload.new as Absence;
-          setAbsences(current => row.absence_date === selectedDate ? current.some(item => item.id === row.id) ? current.map(item => item.id === row.id ? row : item).sort((a, b) => a.start_time.localeCompare(b.start_time)) : [...current, row].sort((a, b) => a.start_time.localeCompare(b.start_time)) : current.filter(item => item.id !== row.id));
+          setAbsences(current => row.absence_date === selectedDate ? current.some(item => item.id === row.id) ? current.map(item => item.id === row.id ? row : item) : [...current, row] : current.filter(item => item.id !== row.id));
         } else if (payload.eventType === 'DELETE') {
           const row = payload.old as Partial<Absence>;
           setAbsences(current => current.filter(item => item.id !== row.id));
@@ -94,89 +122,179 @@ export const ShiftsPage: React.FC = () => {
     return () => { active = false; void supabase.removeChannel(channel); };
   }, [selectedDate]);
 
-  useEffect(() => {
-    if (!user?.id || !canManage) return;
-    let active = true;
-    const loadNotifications = async () => {
-      const { data } = await supabase.from('notifications').select('id,recipient_id,type,title,message,data,read_at,created_at').eq('recipient_id', user.id).is('read_at', null).order('created_at', { ascending: false }).limit(20);
-      if (!active || !data?.length) return;
-      data.forEach((item: SiteNotification) => showWarning(item.title, item.message || undefined));
-      const ids = data.map(item => item.id);
-      void supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids).eq('recipient_id', user.id);
-    };
-    void loadNotifications();
-    const channel = supabase.channel(`notifications-realtime-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, payload => {
-        if (!active) return;
-        const notification = payload.new as SiteNotification;
-        if (notification.recipient_id !== user.id) return;
-        showWarning(notification.title, notification.message || undefined);
-        void supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', notification.id).eq('recipient_id', user.id);
-      })
-      .subscribe(status => { if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Realtime notifiche non disponibile:', status); });
-    return () => { active = false; void supabase.removeChannel(channel); };
-  }, [canManage, showWarning, user?.id]);
+  const openCreateShift = (slot: WorkSlot) => {
+    if (!canManage) return showWarning('Permesso negato', 'Solo Direzione e Proprietario possono modificare i turni.');
+    const info = getSlotInfo(slot);
+    setEditingIds([]);
+    setForm({ slot, userIds: ['', ''], notes: '' });
+    setEditor('shift');
+  };
 
-  const shiftsBySlot = useMemo(() => { const map = new Map<Exclude<Slot, 'tutto_giorno'>, Shift[]>(); SLOTS.filter(slot => slot.key !== 'tutto_giorno').forEach(slot => map.set(slot.key as Exclude<Slot, 'tutto_giorno'>, [])); shifts.forEach(shift => map.get(getSlot(shift.start_time))!.push(shift)); return map; }, [shifts]);
-  const absencesBySlot = useMemo(() => { const map = new Map<Slot, Absence[]>(); SLOTS.forEach(slot => map.set(slot.key, [])); absences.forEach(absence => { if (absence.slot === 'tutto_giorno') SLOTS.filter(slot => slot.key !== 'tutto_giorno').forEach(slot => map.get(slot.key)!.push(absence)); else map.get(absence.slot)?.push(absence); }); return map; }, [absences]);
-
-  const openCreateShift = (slotKey: Exclude<Slot, 'tutto_giorno'> = 'mattino') => { if (!canManage) { showWarning('Permesso negato', 'Solo i gradi alti possono modificare i turni.'); return; } const slot = slotInfo(slotKey); setEditingIds([]); setForm({ slot: slotKey, userIds: [users[0]?.id || '', users[1]?.id || ''], start: slot.from, end: slot.to, notes: '' }); setEditor('shift'); };
-  const openEditShift = (rows: Shift[]) => { if (!canManage) return; const pair = rows.slice(0, 2); const slotKey = getSlot(pair[0]?.start_time || '06:00'); const slot = slotInfo(slotKey); setEditingIds(pair.map(row => row.id)); setForm({ slot: slotKey, userIds: [pair[0]?.user_id || '', pair[1]?.user_id || ''], start: pair[0]?.start_time.slice(0, 5) || slot.from, end: pair[0]?.end_time.slice(0, 5) || slot.to, notes: pair[0]?.notes || pair[1]?.notes || '' }); setEditor('shift'); };
-  const openCreateAbsence = (slot: Slot = 'mattino') => { if (!user?.id) return; setEditingAbsenceId(null); setAbsenceForm({ slot, note: '' }); setEditor('absence'); };
-  const openEditAbsence = (absence: Absence) => { if (!user?.id || absence.user_id !== user.id) return; setEditingAbsenceId(absence.id); setAbsenceForm({ slot: absence.slot, note: absence.note || '' }); setEditor('absence'); };
+  const openEditShift = (slot: WorkSlot) => {
+    if (!canManage) return;
+    const rows = shiftsBySlot.get(slot) || [];
+    const info = getSlotInfo(slot);
+    setEditingIds(rows.map(row => row.id));
+    setForm({ slot, userIds: [rows[0]?.user_id || '', rows[1]?.user_id || ''], notes: rows[0]?.notes || rows[1]?.notes || '' });
+    setEditor('shift');
+  };
 
   const saveShift = async () => {
     if (!canManage || saving) return;
-    const [firstUser, secondUser] = form.userIds;
-    if (!firstUser || !secondUser || firstUser === secondUser) { showError('Coppia non valida', 'Seleziona due persone diverse.'); return; }
+    const [first, second] = form.userIds;
+    if (!first || !second || first === second) return showError('Coppia non valida', 'Ogni turno deve avere due dipendenti diversi.');
+    const info = getSlotInfo(form.slot);
     setSaving(true);
     try {
-      const duplicate = shifts.some(shift => !editingIds.includes(shift.id) && form.userIds.includes(shift.user_id) && getSlot(shift.start_time) === form.slot);
-      if (duplicate) { showWarning('Turno già presente', 'Una delle persone è già assegnata a questa fascia.'); return; }
-      if (editingIds.length) { const { error } = await supabase.from('daily_shifts').delete().in('id', editingIds); if (error) throw error; }
-      const payload = form.userIds.map(userId => ({ user_id: userId, shift_date: selectedDate, start_time: normalizeTime(form.start), end_time: normalizeTime(form.end), notes: form.notes.trim() || null, created_by: user?.id ?? null }));
+      const duplicate = shifts.some(row => !editingIds.includes(row.id) && form.userIds.includes(row.user_id) && getSlot(row.start_time) === form.slot);
+      if (duplicate) { showWarning('Turno già assegnato', 'Uno dei due dipendenti è già presente in questa fascia.'); return; }
+      if (editingIds.length) {
+        const { error } = await supabase.from('daily_shifts').delete().in('id', editingIds);
+        if (error) throw error;
+      }
+      const payload = form.userIds.map(userId => ({ user_id: userId, shift_date: selectedDate, start_time: normalizeTime(info.from), end_time: normalizeTime(info.to), notes: form.notes.trim() || null, created_by: user?.id || null }));
       const { data, error } = await supabase.from('daily_shifts').insert(payload).select('id,user_id,shift_date,start_time,end_time,notes');
       if (error) throw error;
-      if (editingIds.length) setShifts(current => current.filter(item => !editingIds.includes(item.id)).concat((data || []) as Shift[]).sort((a, b) => a.start_time.localeCompare(b.start_time)));
-      else if (data?.length) setShifts(current => [...current, ...(data as Shift[])].filter((item, index, arr) => arr.findIndex(row => row.id === item.id) === index).sort((a, b) => a.start_time.localeCompare(b.start_time)));
-      setEditor(null); showSuccess(editingIds.length ? 'Turno aggiornato' : 'Turno aggiunto');
-    } catch (error) { console.error('Errore salvataggio turno:', error); showError('Impossibile salvare il turno', error instanceof Error ? error.message : 'Controlla i dati e riprova.'); } finally { setSaving(false); }
+      const inserted = (data || []) as Shift[];
+      setShifts(current => [...current.filter(row => !editingIds.includes(row.id)), ...inserted]);
+      setEditor(null);
+      showSuccess(editingIds.length ? 'Coppia aggiornata' : 'Coppia assegnata');
+    } catch (error) {
+      console.error('Errore salvataggio turno:', error);
+      showError('Impossibile salvare il turno', error instanceof Error ? error.message : 'Controlla i dati e riprova.');
+    } finally { setSaving(false); }
   };
+
+  const deleteShift = async (slot: WorkSlot) => {
+    if (!canManage || saving) return;
+    const rows = shiftsBySlot.get(slot) || [];
+    if (!rows.length) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('daily_shifts').delete().in('id', rows.map(row => row.id));
+      if (error) throw error;
+      setShifts(current => current.filter(row => !rows.some(item => item.id === row.id)));
+      showSuccess('Turno rimosso');
+    } catch (error) { showError('Impossibile rimuovere il turno', error instanceof Error ? error.message : 'Riprova.'); }
+    finally { setSaving(false); }
+  };
+
+  const openCreateAbsence = (slot: Slot = 'mattino') => { if (!user?.id) return; setEditingAbsenceId(null); setAbsenceForm({ slot, note: '' }); setEditor('absence'); };
+  const openEditAbsence = (absence: Absence) => { if (absence.user_id !== user?.id) return; setEditingAbsenceId(absence.id); setAbsenceForm({ slot: absence.slot, note: absence.note || '' }); setEditor('absence'); };
 
   const saveAbsence = async () => {
     if (!user?.id || saving) return;
+    const info = getSlotInfo(absenceForm.slot);
     setSaving(true);
     try {
-      const info = slotInfo(absenceForm.slot);
       const payload = { user_id: user.id, absence_date: selectedDate, slot: absenceForm.slot, start_time: normalizeTime(info.from), end_time: normalizeTime(info.to), note: absenceForm.note.trim() || null, created_by: user.id };
       if (editingAbsenceId) {
         const { data, error } = await supabase.from('shift_absences').update(payload).eq('id', editingAbsenceId).eq('user_id', user.id).select('id,user_id,absence_date,slot,start_time,end_time,note,created_by').single();
         if (error) throw error;
-        setAbsences(current => current.map(item => item.id === data.id ? data as Absence : item));
+        setAbsences(current => current.map(item => item.id === editingAbsenceId ? data as Absence : item));
       } else {
         const { data, error } = await supabase.from('shift_absences').insert(payload).select('id,user_id,absence_date,slot,start_time,end_time,note,created_by').single();
         if (error) throw error;
-        setAbsences(current => current.some(item => item.id === data.id) ? current : [...current, data as Absence].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+        setAbsences(current => [...current, data as Absence]);
       }
-      setEditor(null); showSuccess(editingAbsenceId ? 'Assenza aggiornata' : 'Assenza registrata', 'I gradi alti verranno notificati automaticamente.');
-    } catch (error) { console.error('Errore salvataggio assenza:', error); showError('Impossibile salvare l’assenza', error instanceof Error ? error.message : 'Controlla i dati e riprova.'); } finally { setSaving(false); }
+      setEditor(null);
+      showSuccess(editingAbsenceId ? 'Assenza aggiornata' : 'Disponibilità salvata');
+    } catch (error) { console.error('Errore salvataggio assenza:', error); showError('Impossibile salvare la disponibilità', error instanceof Error ? error.message : 'Riprova.'); }
+    finally { setSaving(false); }
   };
 
-  const removeAbsence = async (absence: Absence) => {
-    if (!user?.id || absence.user_id !== user.id || !window.confirm('Vuoi eliminare la tua assenza?')) return;
-    const { error } = await supabase.from('shift_absences').delete().eq('id', absence.id).eq('user_id', user.id);
-    if (error) { showError('Impossibile eliminare', error.message); return; }
-    setAbsences(current => current.filter(item => item.id !== absence.id)); showSuccess('Assenza eliminata');
+  const deleteAbsence = async (absence: Absence) => {
+    if (absence.user_id !== user?.id || saving) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('shift_absences').delete().eq('id', absence.id).eq('user_id', user.id);
+      if (error) throw error;
+      setAbsences(current => current.filter(item => item.id !== absence.id));
+      showSuccess('Disponibilità rimossa');
+    } catch (error) { showError('Impossibile rimuovere la disponibilità', error instanceof Error ? error.message : 'Riprova.'); }
+    finally { setSaving(false); }
   };
-  const removePair = async (rows: Shift[]) => { if (!canManage || !rows.length || !window.confirm('Vuoi eliminare l’intera coppia da questo turno?')) return; const { error } = await supabase.from('daily_shifts').delete().in('id', rows.slice(0, 2).map(row => row.id)); if (error) { showError('Impossibile eliminare il turno', error.message); return; } setShifts(current => current.filter(item => !rows.slice(0, 2).some(row => row.id === item.id))); showSuccess('Turno eliminato'); };
-  const renderPeople = (rows: Shift[]) => rows.slice(0, 2).map((shift, index) => { const employee = userMap.get(shift.user_id); if (!employee) return null; return <React.Fragment key={shift.id}>{index > 0 && <span className="text-lg font-bold text-gray-300">+</span>}<div className="flex min-w-0 items-center gap-2"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="sm" fallbackText={employee.name} /><div className="min-w-0"><p className="max-w-[160px] truncate text-sm font-bold text-gray-900">{employee.name}</p><p className="text-[11px] text-gray-500">{ROLE_LABELS[employee.role] || employee.role}</p></div></div></React.Fragment>; });
-  const renderAbsences = (slot: Exclude<Slot,'tutto_giorno'>) => (absencesBySlot.get(slot) || []).map(absence => { const employee = userMap.get(absence.user_id); if (!employee) return null; const own = absence.user_id === user?.id; return <div key={`${slot}-${absence.id}`} className="mt-2 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-2.5"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="sm" fallbackText={employee.name} /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-red-900">{employee.name} · ASSENTE</p><p className="text-[11px] text-red-700">{absence.slot === 'tutto_giorno' ? 'Tutto il giorno' : absence.note || 'Assenza registrata'}</p></div>{own && <div className="flex gap-1"><button onClick={() => openEditAbsence(absence)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"><Edit3 className="h-3.5 w-3.5 text-red-700" /></button><button onClick={() => void removeAbsence(absence)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"><Trash2 className="h-3.5 w-3.5 text-red-700" /></button></div>}</div>; });
 
-  return <div className="mx-auto w-full max-w-7xl space-y-5 pb-8">
-    <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 p-5 text-white shadow-xl sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-amber-300"><CalendarDays className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-[0.2em]">Programmazione</span></div><h1 className="text-2xl font-bold sm:text-3xl">Turni</h1><p className="mt-1 text-sm text-gray-300">Turni e assenze organizzati per fascia, sempre aggiornati in tempo reale.</p></div><div className="flex flex-col gap-2 sm:flex-row"><button onClick={() => openCreateAbsence()} disabled={!user?.id || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-500/15 px-4 font-semibold text-red-100 transition hover:bg-red-500/25 disabled:opacity-50"><UserRoundX className="h-5 w-5" />Comunica assenza</button><button onClick={() => openCreateShift()} disabled={!users.length || saving || !canManage} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-5 w-5" />Aggiungi turno</button></div></div></div>
-    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4"><div className="flex items-center justify-between gap-2"><button onClick={() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() - 1); setSelectedDate(formatDate(d)); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"><ChevronLeft className="h-5 w-5" /></button><div className="min-w-0 text-center"><p className="truncate text-xs font-semibold uppercase tracking-wider text-gray-400">Programmazione del giorno</p><p className="truncate text-sm font-bold capitalize text-gray-900 sm:text-base">{displayDate(selectedDate)}</p></div><button onClick={() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() + 1); setSelectedDate(formatDate(d)); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"><ChevronRight className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-7 gap-1 sm:gap-2">{weekDates.map(date => { const value = formatDate(date); const active = value === selectedDate; return <button key={value} onClick={() => setSelectedDate(value)} className={`min-w-0 rounded-xl px-1 py-2 text-center transition ${active ? 'bg-amber-500 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}><span className="block truncate text-[10px] font-semibold uppercase sm:text-xs">{shortDate(date).split(' ')[0]}</span><span className="mt-0.5 block text-sm font-bold sm:text-base">{date.getDate()}</span></button>; })}</div></div>
-    {loading ? <div className="flex h-48 items-center justify-center rounded-2xl border border-gray-200 bg-white"><div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /></div> : <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[900px] border-collapse"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="w-[210px] px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fascia</th><th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Turno assegnato</th><th className="w-[180px] px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Orario</th><th className="w-[250px] px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Assenze / note</th><th className="w-[110px] px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Azioni</th></tr></thead><tbody>{SLOTS.filter(slot => slot.key !== 'tutto_giorno').map(slot => { const Icon = slot.icon; const rows = shiftsBySlot.get(slot.key as Exclude<Slot, 'tutto_giorno'>) || []; const absenceRows = absencesBySlot.get(slot.key) || []; return <tr key={slot.key} className="border-b border-gray-100 align-top last:border-0"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Icon className="h-5 w-5" /></div><div><p className="font-bold text-gray-900">{slot.label}</p><p className="text-xs text-gray-500">{slot.subtitle}</p></div></div></td><td className="px-5 py-4">{rows.length ? <div className="flex flex-wrap items-center gap-3">{renderPeople(rows)}</div> : <span className="text-sm text-gray-400">Nessun turno assegnato</span>}{absenceRows.length > 0 && <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-3.5 w-3.5" />Copertura da verificare</div>}</td><td className="px-5 py-4"><span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700"><Clock3 className="h-3.5 w-3.5" />{rows[0] ? `${rows[0].start_time.slice(0,5)} — ${rows[0].end_time.slice(0,5)}` : slot.subtitle}</span></td><td className="px-5 py-4">{absenceRows.length ? absenceRows.map(absence => { const employee = userMap.get(absence.user_id); return employee ? <div key={absence.id} className="mb-2 last:mb-0 rounded-xl border border-red-100 bg-red-50 p-2.5"><div className="flex items-center gap-2"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="sm" fallbackText={employee.name} /><div className="min-w-0"><p className="truncate text-xs font-bold text-red-900">{employee.name} · Assente</p><p className="text-[11px] text-red-700">{absence.slot === 'tutto_giorno' ? 'Tutto il giorno' : absence.note || 'Nessuna nota'}</p></div></div>{absence.user_id === user?.id && <div className="mt-2 flex justify-end gap-1"><button onClick={() => openEditAbsence(absence)} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100">Modifica</button><button onClick={() => void removeAbsence(absence)} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100">Elimina</button></div>}</div> : null }) : <span className="text-xs text-gray-400">Nessuna assenza</span>}</td><td className="px-5 py-4 text-right">{canManage && rows.length > 0 && <div className="flex justify-end gap-1"><button onClick={() => openEditShift(rows)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600" title="Modifica coppia"><Edit3 className="h-4 w-4" /></button><button onClick={() => void removePair(rows)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600" title="Elimina coppia"><Trash2 className="h-4 w-4" /></button></div>}</td></tr>; })}</tbody></table></div><div className="divide-y divide-gray-100 md:hidden">{SLOTS.filter(slot => slot.key !== 'tutto_giorno').map(slot => { const Icon = slot.icon; const rows = shiftsBySlot.get(slot.key as Exclude<Slot, 'tutto_giorno'>) || []; return <section key={slot.key} className="p-4"><div className="mb-3 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Icon className="h-5 w-5" /></div><div><h3 className="font-bold text-gray-900">{slot.label}</h3><p className="text-xs text-gray-500">{slot.subtitle}</p></div></div>{rows.length ? <div className="space-y-2">{rows.slice(0,2).map(shift => { const employee = userMap.get(shift.user_id); if (!employee) return null; return <div key={shift.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="md" fallbackText={employee.name} /><div className="min-w-0 flex-1"><p className="truncate font-bold text-gray-900">{employee.name}</p><p className="truncate text-xs text-gray-500">{ROLE_LABELS[employee.role] || employee.role}</p><p className="mt-1 text-xs font-semibold text-amber-700">{shift.start_time.slice(0,5)} — {shift.end_time.slice(0,5)}</p></div></div>; })}</div> : <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">Nessun turno assegnato</div>}{renderAbsences(slot.key)}</section>; })}</div></div>}
-    {editor === 'shift' && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4"><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-gray-900">{editingIds.length ? 'Modifica coppia' : 'Aggiungi turno'}</h2><p className="text-xs text-gray-500 capitalize">{displayDate(selectedDate)}</p></div><button onClick={() => setEditor(null)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"><X /></button></div><div className="mt-5 space-y-4"><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Fascia</span><select value={form.slot} onChange={e => { const slot = slotInfo(e.target.value as Exclude<Slot,'tutto_giorno'>); setForm(v => ({ ...v, slot: e.target.value as Exclude<Slot,'tutto_giorno'>, start: slot.from, end: slot.to })); }} className="h-11 w-full rounded-xl border border-gray-200 px-3">{SLOTS.filter(slot => slot.key !== 'tutto_giorno').map(slot => <option key={slot.key} value={slot.key}>{slot.label} · {slot.subtitle}</option>)}</select></label><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{form.userIds.map((id,index) => <label key={index}><span className="mb-1.5 block text-sm font-semibold text-gray-700">Persona {index + 1}</span><select value={id} onChange={e => setForm(v => ({ ...v, userIds: v.userIds.map((current,i) => i === index ? e.target.value : current) }))} className="h-11 w-full rounded-xl border border-gray-200 px-3">{users.map(item => <option key={item.id} value={item.id}>{item.name} · {ROLE_LABELS[item.role] || item.role}</option>)}</select></label>)}</div><div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Inizio</span><input type="time" value={form.start} onChange={e => setForm(v => ({ ...v, start:e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Fine</span><input type="time" value={form.end} onChange={e => setForm(v => ({ ...v, end:e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3" /></label></div><textarea value={form.notes} onChange={e => setForm(v => ({ ...v, notes:e.target.value }))} rows={3} maxLength={500} placeholder="Nota del turno (opzionale)" className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm" /><div className="flex gap-2"><button onClick={() => setEditor(null)} className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold">Annulla</button><button onClick={() => void saveShift()} disabled={saving} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 font-bold text-gray-950 disabled:opacity-60">{saving ? 'Salvataggio...' : <><Save className="h-4 w-4" />Salva</>}</button></div></div></div></div>}
-    {editor === 'absence' && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4"><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="flex items-center justify-between"><div><div className="mb-1 flex items-center gap-2 text-red-600"><UserRoundX className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-wider">Assenza</span></div><h2 className="text-lg font-bold text-gray-900">{editingAbsenceId ? 'Modifica assenza' : 'Comunica assenza'}</h2><p className="text-xs capitalize text-gray-500">{displayDate(selectedDate)}</p></div><button onClick={() => setEditor(null)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"><X /></button></div><div className="mt-5 space-y-4"><div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3"><Avatar src={user?.avatar_url || undefined} alt={user?.name || 'Tu'} size="md" fallbackText={user?.name || 'Tu'} /><div><p className="font-bold text-gray-900">{user?.name || 'Utente'}</p><p className="text-xs text-gray-500">La tua assenza</p></div></div><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Fascia di assenza</span><select value={absenceForm.slot} onChange={e => setAbsenceForm(v => ({ ...v, slot:e.target.value as Slot }))} className="h-11 w-full rounded-xl border border-gray-200 px-3">{SLOTS.map(slot => <option key={slot.key} value={slot.key}>{slot.label} · {slot.subtitle}</option>)}</select></label><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Nota</span><textarea value={absenceForm.note} onChange={e => setAbsenceForm(v => ({ ...v, note:e.target.value }))} rows={4} maxLength={500} placeholder="Es. malattia, permesso, impegno personale..." className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm" /></label><div className="rounded-xl bg-red-50 p-3 text-xs text-red-800"><strong>Nota:</strong> comunichi solo la tua assenza. I gradi alti verranno avvisati automaticamente in tempo reale.</div><div className="flex gap-2"><button onClick={() => setEditor(null)} className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold">Annulla</button><button onClick={() => void saveAbsence()} disabled={saving} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 font-bold text-white disabled:opacity-60">{saving ? 'Salvataggio...' : <><Save className="h-4 w-4" />Comunica assenza</>}</button></div></div></div></div>}
-  </div>;
+  const navigateWeek = (direction: number) => {
+    const date = new Date(`${selectedDate}T12:00:00`);
+    date.setDate(date.getDate() + direction * 7);
+    setSelectedDate(formatDate(date));
+  };
+
+  return (
+    <div className="page-container shifts-page">
+      <div className="page-header">
+        <div>
+          <div className="page-title"><CalendarDays size={22} /> Turni</div>
+          <p className="page-subtitle">Pianificazione giornaliera a coppie · 4 fasce operative</p>
+        </div>
+        <div className="shifts-header-actions">
+          <button className="btn btn-secondary" onClick={() => navigateWeek(-1)} aria-label="Settimana precedente"><ChevronLeft size={18} /></button>
+          <button className="btn btn-secondary" onClick={() => setSelectedDate(formatDate(new Date()))}>Oggi</button>
+          <button className="btn btn-secondary" onClick={() => navigateWeek(1)} aria-label="Settimana successiva"><ChevronRight size={18} /></button>
+        </div>
+      </div>
+
+      <div className="shifts-week-strip">
+        {weekDates.map(date => {
+          const value = formatDate(date);
+          const active = value === selectedDate;
+          return <button key={value} className={`shifts-day ${active ? 'active' : ''}`} onClick={() => setSelectedDate(value)}><span>{shortDate(date)}</span><strong>{date.getDate()}</strong></button>;
+        })}
+      </div>
+
+      <div className="shifts-date-title"><Clock3 size={18} /> <span>{displayDate(selectedDate)}</span></div>
+
+      {loading ? <div className="shifts-empty">Caricamento turni…</div> : (
+        <div className="shifts-table-wrap">
+          <table className="shifts-table">
+            <thead><tr><th>Fascia</th><th>Dipendente 1</th><th>Dipendente 2</th><th>Note</th><th aria-label="Azioni" /></tr></thead>
+            <tbody>
+              {SLOTS.map(slot => {
+                const rows = shiftsBySlot.get(slot.key) || [];
+                const absences = absencesBySlot.get(slot.key) || [];
+                const people = rows.slice(0, 2).map(row => userMap.get(row.user_id)).filter(Boolean) as UserRow[];
+                const note = rows.find(row => row.notes)?.notes;
+                const Icon = slot.icon;
+                return <tr key={slot.key}>
+                  <td><div className="shift-slot-cell"><span className="shift-slot-icon"><Icon size={19} /></span><div><strong>{slot.label}</strong><small>{slot.time}</small></div></div></td>
+                  {[0, 1].map(index => {
+                    const person = people[index];
+                    const absence = absences.find(item => item.user_id === person?.id);
+                    return <td key={index}>
+                      {person ? <div className="shift-person"><Avatar src={person.avatar_url || undefined} name={person.name} size={34} /><div><strong>{person.name}</strong><small>{ROLE_LABELS[person.role] || person.role}</small></div></div> : <span className="shift-unassigned">Non assegnato</span>}
+                      {absence && <span className="shift-absence-badge">Assente</span>}
+                    </td>;
+                  })}
+                  <td>{note ? <span className="shift-note">{note}</span> : <span className="shift-muted">—</span>}</td>
+                  <td><div className="shift-row-actions">
+                    {canManage && <><button className="icon-btn" onClick={() => rows.length ? openEditShift(slot.key) : openCreateShift(slot.key)} title={rows.length ? 'Modifica coppia' : 'Assegna coppia'}>{rows.length ? <Edit3 size={16} /> : <Plus size={17} />}</button>{rows.length > 0 && <button className="icon-btn danger" onClick={() => void deleteShift(slot.key)} title="Rimuovi coppia"><Trash2 size={16} /></button>}</>}
+                    {!canManage && <button className="icon-btn" onClick={() => openCreateAbsence(slot.key)} title="Segnala indisponibilità"><UserRoundX size={16} /></button>}
+                  </div></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!canManage && <div className="shifts-availability-card"><div><strong>La tua disponibilità</strong><span>Segnala un'assenza per una o tutte le fasce della giornata.</span></div><button className="btn btn-secondary" onClick={() => openCreateAbsence('tutto_giorno')}><UserRoundX size={16} /> Segnala assenza</button></div>}
+
+      {absences.length > 0 && <div className="shifts-absence-list"><h3>Le tue indisponibilità</h3>{absences.filter(item => item.user_id === user?.id).map(absence => <div className="shift-absence-item" key={absence.id}><div><strong>{getSlotInfo(absence.slot).label}</strong><span>{absence.note || 'Nessuna nota'}</span></div><div><button className="icon-btn" onClick={() => openEditAbsence(absence)}><Edit3 size={15} /></button><button className="icon-btn danger" onClick={() => void deleteAbsence(absence)}><Trash2 size={15} /></button></div></div>)}</div>}
+
+      {editor && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditor(null); }}><div className="modal-card">
+        <div className="modal-header"><div><h2>{editor === 'shift' ? (editingIds.length ? 'Modifica coppia' : 'Assegna coppia') : (editingAbsenceId ? 'Modifica indisponibilità' : 'Segnala indisponibilità')}</h2><p>{displayDate(selectedDate)}</p></div><button className="icon-btn" onClick={() => setEditor(null)}><X size={18} /></button></div>
+        {editor === 'shift' ? <>
+          <label>Fascia<select value={form.slot} onChange={event => setForm(current => ({ ...current, slot: event.target.value as WorkSlot }))}>{SLOTS.map(slot => <option key={slot.key} value={slot.key}>{slot.label} · {slot.time}</option>)}</select></label>
+          <div className="shift-form-grid"><label>Dipendente 1<select value={form.userIds[0]} onChange={event => setForm(current => ({ ...current, userIds: [event.target.value, current.userIds[1]] }))}><option value="">Seleziona…</option>{users.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Dipendente 2<select value={form.userIds[1]} onChange={event => setForm(current => ({ ...current, userIds: [current.userIds[0], event.target.value] }))}><option value="">Seleziona…</option>{users.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+          <label>Note<textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="Note opzionali…" rows={3} /></label>
+          <button className="btn btn-primary modal-submit" disabled={saving} onClick={() => void saveShift()}><Save size={17} /> {saving ? 'Salvataggio…' : 'Salva coppia'}</button>
+        </> : <>
+          <label>Fascia<select value={absenceForm.slot} onChange={event => setAbsenceForm(current => ({ ...current, slot: event.target.value as Slot }))}><option value="tutto_giorno">Tutto il giorno · assenza completa</option>{SLOTS.map(slot => <option key={slot.key} value={slot.key}>{slot.label} · {slot.time}</option>)}</select></label>
+          <label>Nota<textarea value={absenceForm.note} onChange={event => setAbsenceForm(current => ({ ...current, note: event.target.value }))} placeholder="Motivo o comunicazione opzionale…" rows={3} /></label>
+          <button className="btn btn-primary modal-submit" disabled={saving} onClick={() => void saveAbsence()}><Save size={17} /> {saving ? 'Salvataggio…' : 'Salva indisponibilità'}</button>
+        </>}
+      </div></div>}
+    </div>
+  );
 };
