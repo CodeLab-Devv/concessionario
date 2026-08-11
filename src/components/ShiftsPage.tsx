@@ -1,4 +1,4 @@
-```tsx
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -2374,4 +2374,4 @@ export const ShiftsPage: React.FC = () => {
     </div>
   );
 };
-```
+
