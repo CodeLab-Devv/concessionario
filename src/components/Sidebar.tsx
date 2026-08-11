@@ -1,9 +1,9 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Users, DollarSign, ChevronLeft, Megaphone, CalendarDays, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, ChevronLeft, Megaphone, CalendarDays } from 'lucide-react';
 import { useServiceStatus } from '../hooks/useServiceStatus';
 
-interface SidebarProps { isOpen: boolean; onToggle: () => void; currentPage: 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts' | 'warnings'; onPageChange: (page: 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts' | 'warnings') => void; }
+interface SidebarProps { isOpen: boolean; onToggle: () => void; currentPage: 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts'; onPageChange: (page: 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts') => void; }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage, onPageChange }) => {
   const { user } = useAuth();
@@ -13,7 +13,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage,
   const menuItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard, page: 'dashboard' as const },
     { id: 'shifts', label: 'Turni', icon: CalendarDays, page: 'shifts' as const },
-    { id: 'warnings', label: 'Richiami', icon: AlertTriangle, page: 'warnings' as const },
     ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', icon: Megaphone, page: 'announcements' as const }] : []),
     ...(canAccessAdmin ? [{ id: 'admin', label: 'Stipendi', icon: DollarSign, page: 'admin' as const }] : [])
   ];
