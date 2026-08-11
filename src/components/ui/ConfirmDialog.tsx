@@ -57,16 +57,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div className="safe-area-overlay fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={onClose}
-      />
-      
-      {/* Dialog */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="modal-shell relative w-full max-w-lg transform overflow-y-auto rounded-lg bg-white shadow-xl sm:my-8">
-          {/* Close button */}
           <button
             onClick={onClose}
             aria-label="Chiudi"
@@ -81,18 +73,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 {getIcon()}
               </div>
               <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
-                <h3 className="text-base font-semibold leading-6 text-gray-900">
-                  {title}
-                </h3>
+                <h3 className="text-base font-semibold leading-6 text-gray-900">{title}</h3>
                 <div className="mt-2">
-                  <p className="text-sm text-gray-500">
-                    {message}
-                  </p>
+                  <p className="text-sm text-gray-500">{message}</p>
                 </div>
               </div>
             </div>
           </div>
-          
+
           <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
             <button
               type="button"
