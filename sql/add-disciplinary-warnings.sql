@@ -43,4 +43,19 @@ FOR SELECT
 TO authenticated
 USING (employee_id = auth.uid());
 
+-- Abilita Supabase Realtime senza generare errore se la tabella è già presente.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'disciplinary_warnings'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.disciplinary_warnings;
+  END IF;
+END
+$$;
+
 COMMENT ON TABLE public.disciplinary_warnings IS 'Richiami disciplinari assegnati dai proprietari ai dipendenti';
