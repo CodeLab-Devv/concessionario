@@ -57,7 +57,7 @@ export const MainLayout: React.FC = () => {
           hasAnnouncementsAccess ? <AnnouncementsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Sezione non disponibile</h3><p className="text-gray-600">Devi essere in servizio per visualizzare gli annunci.</p></div></div>
         ) : currentPage === 'documents' ? (
           hasDocumentsAccess ? <DocumentsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo concessionari possono accedere a questa sezione.</p></div></div>
-        ) : <>{hasAdminAccess ? <AdminPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo proprietari e direttori possono accedere a questa sezione.</p></div></div>}{hasAdminAccess && <WarningsWidget mode="manage" />}</>}
+        ) : hasAdminAccess ? <AdminPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo proprietari e direttori possono accedere a questa sezione.</p></div></div>}
       </div>
     </div>
     <AnnouncementServiceNotifier onOpen={() => handlePageChange('announcements')} />
