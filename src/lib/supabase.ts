@@ -11,7 +11,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
+    storageKey: 'concessionario-auth-session',
     detectSessionInUrl: false,
+    flowType: 'pkce',
   }
 })
 
