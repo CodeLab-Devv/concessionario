@@ -118,7 +118,7 @@ export const UserRoleManager: React.FC = () => {
     <div className="bg-white shadow rounded-lg p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Gestione Ruoli Utenti</h3>
       
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 [scrollbar-width:thin]">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -161,7 +161,7 @@ export const UserRoleManager: React.FC = () => {
                       value={userData.role}
                       onChange={(e) => handleRoleUpdate(userData.id, e.target.value as User['role'])}
                       disabled={updating === userData.id}
-                      className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="border border-gray-300 rounded-md px-2 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:py-1 sm:text-sm"
                     >
                       <option value="probation">In Prova</option>
                       <option value="employee">Dipendente</option>

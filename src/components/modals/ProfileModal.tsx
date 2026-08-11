@@ -208,8 +208,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   if (!isOpen || !user) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden animate-fadeIn">
+    <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="modal-shell flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-fadeIn">
         {/* Header */}
         <div className="bg-gradient-to-br from-slate-800 via-gray-800 to-slate-900 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-indigo-600/10"></div>
@@ -236,7 +236,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Content Container */}
-        <div className="overflow-y-auto max-h-[calc(95vh-120px)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {/* User Info Display */}
           <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 sm:p-8 border-b border-gray-100">
             <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">

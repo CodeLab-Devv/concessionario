@@ -642,7 +642,7 @@ export const DocumentsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+    <div className="app-viewport bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
       {/* Indicatore di caricamento sottile per aggiornamenti real-time */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50">
@@ -730,8 +730,8 @@ export const DocumentsPage: React.FC = () => {
 
       {/* Create Form Modal */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-gray-100">
+        <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="modal-shell flex w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl">
             {/* Header with gradient */}
             <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 p-4 relative overflow-hidden">
               <div className="absolute inset-0 bg-black/10"></div>
@@ -761,7 +761,7 @@ export const DocumentsPage: React.FC = () => {
             </div>
             
             {/* Form Content */}
-            <div className="p-3 overflow-y-auto max-h-[calc(90vh-80px)]">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 {/* Customer Info Section */}
@@ -1125,8 +1125,8 @@ export const DocumentsPage: React.FC = () => {
                       <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg">
                         <User className="h-6 w-6 text-white" />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-amber-600 transition-colors">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-lg font-bold text-gray-900 group-hover:text-amber-600 transition-colors">
                           {doc.customer_name} {doc.customer_surname}
                         </h3>
                         <p className="text-sm text-gray-600">Cliente</p>
@@ -1135,14 +1135,16 @@ export const DocumentsPage: React.FC = () => {
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => handleEdit(doc)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100"
+                        aria-label="Modifica documento"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-blue-600 hover:bg-blue-100 sm:opacity-0 sm:group-hover:opacity-100"
                         title="Modifica documento"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(doc.id)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100"
+                        aria-label="Elimina documento"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-red-600 hover:bg-red-100 sm:opacity-0 sm:group-hover:opacity-100"
                         title="Elimina documento"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1154,22 +1156,22 @@ export const DocumentsPage: React.FC = () => {
                 {/* Card Content */}
                 <div className="p-6">
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       {doc.vehicle_name ? (
-                        <div className="flex items-center space-x-2 bg-blue-50 px-3 py-2 rounded-lg">
+                        <div className="min-w-0 flex max-w-full items-center space-x-2 rounded-lg bg-blue-50 px-3 py-2">
                           <Car className="h-4 w-4 text-blue-600" />
-                          <div className="text-sm">
-                            <div className="font-medium text-blue-800">{doc.vehicle_name}</div>
+                          <div className="min-w-0 text-sm">
+                            <div className="truncate font-medium text-blue-800">{doc.vehicle_name}</div>
                             <div className="text-xs text-blue-600">{doc.vehicle_type}</div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-lg">
+                        <div className="flex max-w-full items-center space-x-2 rounded-lg bg-gray-50 px-3 py-2">
                           <Car className="h-4 w-4 text-gray-400" />
                           <span className="text-sm text-gray-500">Veicolo non specificato</span>
                         </div>
                       )}
-                      <div className="flex items-center space-x-2 bg-green-50 px-3 py-2 rounded-lg">
+                      <div className="flex shrink-0 items-center space-x-2 rounded-lg bg-green-50 px-3 py-2">
                         <span className="text-xs text-green-600 font-medium">TARGA</span>
                         <span className="text-sm font-bold text-green-800">
                           {doc.license_plate}
@@ -1233,8 +1235,8 @@ export const DocumentsPage: React.FC = () => {
 
         {/* Delete Confirmation Dialog */}
         {showDeleteDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4">
+          <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="modal-shell w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
               <div className="p-6">
                 <div className="flex items-center mb-4">
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
@@ -1251,14 +1253,14 @@ export const DocumentsPage: React.FC = () => {
                 <div className="flex space-x-3">
                   <button
                     onClick={cancelDelete}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="min-h-11 flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   >
                     Annulla
                   </button>
                   <button
                     onClick={confirmDelete}
                     disabled={loading}
-                    className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    className="min-h-11 flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
                     {loading ? 'Eliminazione...' : 'Elimina'}
                   </button>
@@ -1270,11 +1272,12 @@ export const DocumentsPage: React.FC = () => {
 
         {/* Image Preview Modal */}
         {showImageModal && selectedImage && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-            <div className="relative max-w-4xl max-h-full">
+          <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+            <div className="modal-shell relative flex w-full max-w-4xl items-center justify-center overflow-y-auto">
               <button
                 onClick={() => setShowImageModal(false)}
-                className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors"
+                aria-label="Chiudi anteprima"
+                className="absolute right-2 top-2 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-black/40 text-white hover:text-gray-300 sm:right-4 sm:top-4"
               >
                 <X className="h-8 w-8" />
               </button>

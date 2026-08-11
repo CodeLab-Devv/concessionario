@@ -71,7 +71,7 @@ export const Notification: React.FC<NotificationProps> = ({
   return (
     <div
       className={`
-        fixed top-4 right-4 z-50 max-w-sm w-full
+        w-full max-w-sm
         transform transition-all duration-300 ease-in-out
         ${isVisible && !isLeaving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
@@ -97,7 +97,8 @@ export const Notification: React.FC<NotificationProps> = ({
           <div className="ml-4 flex-shrink-0">
             <button
               onClick={handleClose}
-              className="inline-flex rounded-md p-1.5 hover:bg-black hover:bg-opacity-10 transition-colors"
+              aria-label="Chiudi notifica"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-black hover:bg-opacity-10"
             >
               <X className="h-4 w-4" />
             </button>

@@ -398,20 +398,20 @@ export const AdminPage: React.FC = () => {
                             type="number"
                             value={tempCommission}
                             onChange={(e) => setTempCommission(Number(e.target.value))}
-                            className="w-12 sm:w-16 px-1 sm:px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-12 px-1 py-2 text-base border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-16 sm:px-2 sm:py-1 sm:text-sm"
                             min="0"
                             max="100"
                             step="0.1"
                           />
                           <button
                             onClick={() => handleSaveCommission(employee.id)}
-                            className="p-1 text-green-600 hover:text-green-800"
+                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-green-600 hover:text-green-800"
                           >
                             <Save className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>
                           <button
                             onClick={handleCancelEdit}
-                            className="p-1 text-red-600 hover:text-red-800"
+                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-red-600 hover:text-red-800"
                           >
                             <X className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>
@@ -421,7 +421,7 @@ export const AdminPage: React.FC = () => {
                           <span className="text-xs sm:text-sm text-gray-900">{employee.commission}%</span>
                           <button
                             onClick={() => handleEditCommission(employee.id, employee.commission)}
-                            className="p-1 text-amber-600 hover:text-amber-800"
+                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-amber-600 hover:text-amber-800"
                           >
                             <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>

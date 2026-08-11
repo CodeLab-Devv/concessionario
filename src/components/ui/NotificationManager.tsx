@@ -78,7 +78,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       {children}
       
       {/* Notification Container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      <div className="safe-area-top fixed left-4 right-4 top-0 z-50 space-y-2 sm:left-auto sm:right-4 sm:w-96">
         {notifications.map(notification => (
           <Notification key={notification.id} {...notification} />
         ))}

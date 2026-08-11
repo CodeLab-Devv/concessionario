@@ -146,8 +146,8 @@ export const ActivityLogsPanel: React.FC<ActivityLogsPanelProps> = ({ isOpen, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+    <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="modal-shell flex w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
             <Activity className="h-6 w-6 text-red-600" />
@@ -158,7 +158,8 @@ export const ActivityLogsPanel: React.FC<ActivityLogsPanelProps> = ({ isOpen, on
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Chiudi"
+            className="flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600"
           >
             <X className="h-6 w-6" />
           </button>
@@ -185,7 +186,7 @@ export const ActivityLogsPanel: React.FC<ActivityLogsPanelProps> = ({ isOpen, on
               <select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full px-3 py-2 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm"
               >
                 <option value="all">Tutte le azioni</option>
                 {uniqueActions.map(action => (
@@ -199,7 +200,7 @@ export const ActivityLogsPanel: React.FC<ActivityLogsPanelProps> = ({ isOpen, on
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full px-3 py-2 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm"
               >
                 <option value="all">Tutti i periodi</option>
                 <option value="today">Oggi</option>
@@ -210,7 +211,7 @@ export const ActivityLogsPanel: React.FC<ActivityLogsPanelProps> = ({ isOpen, on
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>

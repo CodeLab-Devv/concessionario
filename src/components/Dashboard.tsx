@@ -569,7 +569,7 @@ export const Dashboard: React.FC = () => {
   if (!user?.isOnService) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="app-viewport min-h-[60vh] flex items-center justify-center">
           <div className="text-center space-y-6">
             {/* Icona animata */}
             <div className="relative">
@@ -600,7 +600,7 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-yellow-50/20 to-amber-50/30 relative overflow-hidden">
+    <div className="app-viewport bg-gradient-to-br from-gray-50 via-yellow-50/20 to-amber-50/30 relative overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-30">
         <div className="absolute inset-0" style={{
@@ -777,13 +777,13 @@ export const Dashboard: React.FC = () => {
                                 </div>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <h3 className="text-base font-bold text-gray-900 truncate">{sale.itemName}</h3>
+                                <div className="flex min-w-0 flex-wrap items-center gap-2 mb-1">
+                                  <h3 className="min-w-0 text-base font-bold text-gray-900 truncate">{sale.itemName}</h3>
                                   <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
                                     Concessionario
                                   </span>
                                 </div>
-                                <div className="flex items-center space-x-4 text-xs text-gray-600">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                                   <span className="flex items-center">
                                     <span className="w-1 h-1 bg-yellow-400 rounded-full mr-1"></span>
                                     {new Date(sale.created_at).toLocaleString('it-IT', {
@@ -815,7 +815,7 @@ export const Dashboard: React.FC = () => {
                           </div>
                           
                           {/* Dettagli Finanziari */}
-                          <div className="flex items-center space-x-4">
+                          <div className="flex flex-wrap items-center gap-4">
                             <div className="text-center">
                               <p className="text-xs text-gray-500 font-medium">Qtà</p>
                               <p className="text-sm font-bold text-gray-900">{sale.quantity}</p>
@@ -834,21 +834,21 @@ export const Dashboard: React.FC = () => {
                           <div className="flex space-x-2 ml-6">
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleViewSale(sale); }}
-                              className="group/btn p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-all duration-200 hover:scale-105"
+                              className="group/btn flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
                               title="Visualizza vendita"
                             >
                               <Eye className="h-3 w-3 group-hover/btn:scale-110 transition-transform" />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEditSaleClick(sale); }}
-                              className="group/btn p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 transition-all duration-200 hover:scale-105"
+                              className="group/btn flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 hover:text-green-700"
                               title="Modifica vendita"
                             >
                               <Edit className="h-3 w-3 group-hover/btn:scale-110 transition-transform" />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleDeleteSale(sale.id); }}
-                              className="group/btn p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 transition-all duration-200 hover:scale-105"
+                              className="group/btn flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100 hover:text-red-700"
                               title="Elimina vendita"
                             >
                               <Trash2 className="h-3 w-3 group-hover/btn:scale-110 transition-transform" />
@@ -873,7 +873,7 @@ export const Dashboard: React.FC = () => {
               className="bg-gradient-to-r from-yellow-500 to-amber-600 rounded-t-xl p-6 text-white cursor-pointer hover:from-yellow-600 hover:to-amber-700 transition-all duration-200"
               onClick={() => setIsEmployeeManagementExpanded(!isEmployeeManagementExpanded)}
             >
-              <div className="flex items-center justify-between">
+                          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                     <Users className="h-6 w-6" />
@@ -934,8 +934,8 @@ export const Dashboard: React.FC = () => {
                           className="group bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-yellow-400 transition-all duration-300 hover:-translate-y-1"
                         >
                           {/* Header con Avatar e Status */}
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center space-x-3">
+                          <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center space-x-3">
                               <Avatar 
                                 src={employee.avatar_url} 
                                 alt={employee.name}
@@ -943,8 +943,8 @@ export const Dashboard: React.FC = () => {
                                 fallbackText={employee.name}
                                 className="shadow-lg"
                               />
-                              <div>
-                                <h3 className="font-semibold text-gray-900 group-hover:text-yellow-600 transition-colors">
+                              <div className="min-w-0">
+                                <h3 className="truncate font-semibold text-gray-900 group-hover:text-yellow-600 transition-colors">
                                   {employee.name}
                                 </h3>
                                 <p className="text-sm text-gray-500 truncate max-w-[200px]">
@@ -954,7 +954,7 @@ export const Dashboard: React.FC = () => {
                             </div>
                             
                             {/* Status Online/Offline */}
-                            <div className="flex items-center space-x-1">
+                            <div className="flex shrink-0 items-center space-x-1">
                               <div className={`w-2 h-2 rounded-full ${
                                 employee.isOnService ? 'bg-green-400' : 'bg-gray-300'
                               }`}></div>
