@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Users, DollarSign, ChevronLeft, Megaphone } from 'lucide-react';
+import { useServiceStatus } from '../hooks/useServiceStatus';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,8 +12,9 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage, onPageChange }) => {
   const { user } = useAuth();
+  const isOnService = useServiceStatus(user);
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
-  const canAccessAnnouncements = ['owner', 'director', 'vice_director'].includes(user?.role || '');
+  const canAccessAnnouncements = isOnService && ['owner', 'director', 'vice_director'].includes(user?.role || '');
 
   const menuItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard, page: 'dashboard' as const },
