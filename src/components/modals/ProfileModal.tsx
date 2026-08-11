@@ -36,6 +36,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   
   const [formData, setFormData] = useState({
     name: '',
+    availability: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -45,6 +46,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     if (user && isOpen) {
       setFormData({
         name: user.name || '',
+        availability: user.availability || '',
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
@@ -106,10 +108,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     try {
       let hasChanges = false;
-      const updates: { name?: string } = {};
+      const updates: { name?: string; availability?: string } = {};
 
       if (formData.name.trim() !== user.name) {
         updates.name = formData.name.trim();
+      }
+
+      if (formData.availability.trim() !== (user.availability || '')) {
+        updates.availability = formData.availability.trim();
       }
 
       if (Object.keys(updates).length > 0) {
@@ -137,7 +143,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           throw new Error('Inserisci la password attuale per cambiarla');
         }
 
-        // Verifica password attuale
+        // Verifica la password attuale re-autenticando
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: user.email,
           password: formData.currentPassword
@@ -147,23 +153,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           throw new Error('Password attuale non corretta');
         }
 
-        // Aggiorna la password (Supabase invalida tutte le sessioni vecchie)
+        // Aggiorna la password direttamente sull'utente autenticato
         const { error: passwordError } = await supabase.auth.updateUser({
           password: formData.newPassword
         });
 
         if (passwordError) {
           throw new Error(`Errore aggiornamento password: ${passwordError.message}`);
-        }
-
-        // Ripristina la sessione subito dopo con la nuova password (evita logout)
-        const { error: reloginError } = await supabase.auth.signInWithPassword({
-          email: user.email,
-          password: formData.newPassword
-        });
-
-        if (reloginError) {
-          console.warn('Re-login after password change failed:', reloginError);
         }
 
         hasChanges = true;
