@@ -8,6 +8,7 @@ import { DialogProvider } from './components/ui/DialogManager';
 import { GlobalNotifications } from './components/GlobalNotifications';
 import { MainLayout } from './components/MainLayout';
 import { AnimatedIntro } from './components/AnimatedIntro';
+import { CurrencyDisplayNormalizer } from './components/CurrencyDisplayNormalizer';
 
 const AuthPage: React.FC = () => {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'owner-register'>('login');
@@ -52,6 +53,7 @@ const App: React.FC = () => (
   <AuthProvider>
     <NotificationProvider>
       <GlobalNotifications />
+      <CurrencyDisplayNormalizer />
       <DialogProvider>
         <MainApp />
       </DialogProvider>
