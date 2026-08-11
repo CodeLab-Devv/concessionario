@@ -5,12 +5,10 @@ import { supabase } from '../../lib/supabase';
 import { Avatar } from '../Avatar';
 import { AvatarUpload } from '../AvatarUpload';
 import { AvailabilityEditor } from '../AvailabilityEditor';
-import {
-  X, User, Mail, Shield, Eye, EyeOff, Save, Crown, Award,
-  UserCheck, Lock, Key, CheckCircle, Clock3
-} from 'lucide-react';
+import { X, User, Mail, Shield, Eye, EyeOff, Save, Crown, Award, UserCheck, Lock, Key, CheckCircle } from 'lucide-react';
 
 interface ProfileModalProps { isOpen: boolean; onClose: () => void; }
+type PasswordField = 'currentPassword' | 'newPassword' | 'confirmPassword';
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, refreshUserProfile } = useAuth();
@@ -81,12 +79,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     } catch (error) {
       console.error('Profile update error:', error);
       showError('Errore aggiornamento', error instanceof Error ? error.message : 'Errore imprevisto.');
-    } finally { setIsLoading(false); }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClose = () => {
     setFormData({ name: user?.name || '', email: user?.email || '', availability: user?.availability || '', currentPassword: '', newPassword: '', confirmPassword: '' });
-    setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false);
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     onClose();
   };
 
@@ -94,6 +96,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     owner: <Crown className="h-5 w-5 text-yellow-600" />, director: <Shield className="h-5 w-5 text-blue-600" />, vice_director: <Award className="h-5 w-5 text-purple-600" />, employee: <UserCheck className="h-5 w-5 text-green-600" />, probation: <User className="h-5 w-5 text-orange-600" />,
   }[user?.role || 'probation'];
   const roleLabel = { owner: 'Proprietario', director: 'Direttore', vice_director: 'Vice Direttore', employee: 'Dipendente', probation: 'In Prova' }[user?.role || 'probation'];
+
+  const passwordFields: Array<{ field: PasswordField; label: string; visible: boolean; toggle: React.Dispatch<React.SetStateAction<boolean>>; icon: React.ElementType }> = [
+    { field: 'currentPassword', label: 'Password attuale', visible: showCurrentPassword, toggle: setShowCurrentPassword, icon: Lock },
+    { field: 'newPassword', label: 'Nuova password', visible: showNewPassword, toggle: setShowNewPassword, icon: Key },
+    { field: 'confirmPassword', label: 'Conferma nuova password', visible: showConfirmPassword, toggle: setShowConfirmPassword, icon: CheckCircle },
+  ];
 
   if (!isOpen || !user) return null;
 
@@ -108,7 +116,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           <form onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-7">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <section className="space-y-5 rounded-xl border border-gray-100 bg-white p-5 shadow-sm"><h4 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><User className="h-5 w-5 text-blue-500" />Informazioni personali</h4><div><label className="mb-2 block text-sm font-medium text-gray-700">Immagine profilo</label><AvatarUpload currentAvatarUrl={currentAvatarUrl} onAvatarUpdate={handleAvatarUpdate} size="md" /><p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-500">JPG, PNG, GIF o WEBP. Le immagini grandi vengono compresse automaticamente sotto 5 MB.</p></div><div><label className="mb-2 block text-sm font-medium text-gray-700">Nome completo</label><div className="relative"><input required value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500" /><User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /></div></div><div><label className="mb-2 block text-sm font-medium text-gray-700">Email</label><div className="relative"><input required type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500" /><Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /></div></div><div className="rounded-xl border border-blue-100 bg-blue-50 p-4"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(p => ({ ...p, availability }))} /></div></section>
-              <section className="space-y-5 rounded-xl border border-gray-100 bg-white p-5 shadow-sm"><h4 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><Lock className="h-5 w-5 text-green-500" />Sicurezza account</h4><div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">Per cambiare password inserisci la password attuale e la nuova password. La verifica viene eseguita da Supabase.</div>{[['currentPassword', 'Password attuale', showCurrentPassword, setShowCurrentPassword, Lock], ['newPassword', 'Nuova password', showNewPassword, setShowNewPassword, Key], ['confirmPassword', 'Conferma nuova password', showConfirmPassword, setShowConfirmPassword, CheckCircle].map(([field, label, visible, toggle, Icon]) => <div key={field as string}><label className="mb-2 block text-sm font-medium text-gray-700">{label as string}</label><div className="relative"><input type={visible ? 'text' : 'password'} value={formData[field as keyof typeof formData]} onChange={e => setFormData(p => ({ ...p, [field as string]: e.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 pr-11 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500" />{React.createElement(Icon as React.ElementType, { className: 'absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400' })}<button type="button" onClick={() => (toggle as React.Dispatch<React.SetStateAction<boolean>>)(v => !v)} className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-700">{visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>)}</section>
+              <section className="space-y-5 rounded-xl border border-gray-100 bg-white p-5 shadow-sm"><h4 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><Lock className="h-5 w-5 text-green-500" />Sicurezza account</h4><div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">Per cambiare password inserisci la password attuale e la nuova password. La verifica viene eseguita da Supabase.</div>{passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => <div key={field}><label className="mb-2 block text-sm font-medium text-gray-700">{label}</label><div className="relative"><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={e => setFormData(p => ({ ...p, [field]: e.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 pr-11 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500" /><Icon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /><button type="button" onClick={() => toggle(value => !value)} className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-700">{visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>)}</section>
             </div>
             <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row"><button type="button" onClick={handleClose} className="flex-1 rounded-xl border-2 border-gray-300 px-6 py-3 font-medium text-gray-700 hover:bg-gray-50">Annulla</button><button type="submit" disabled={isLoading} className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-3 font-medium text-white shadow-lg transition hover:from-blue-600 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{isLoading ? <span className="mx-auto block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <span className="flex items-center justify-center gap-2"><Save className="h-5 w-5" />Salva Modifiche</span>}</button></div>
           </form>
