@@ -5,14 +5,15 @@ import { AdminPage } from './AdminPage';
 import { DocumentsPage } from './DocumentsPage';
 import { AnnouncementsPage } from './AnnouncementsPage';
 import { ShiftsPage } from './ShiftsPage';
+import { ActivityPage } from './ActivityPage';
 import { AnnouncementServiceNotifier } from './AnnouncementServiceNotifier';
 import { Header } from './Header';
 import { ChevronRight, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useServiceStatus } from '../hooks/useServiceStatus';
 
-type Page = 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts';
-const PAGES: Page[] = ['dashboard', 'admin', 'documents', 'announcements', 'shifts'];
+type Page = 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts' | 'activity';
+const PAGES: Page[] = ['dashboard', 'admin', 'documents', 'announcements', 'shifts', 'activity'];
 
 export const MainLayout: React.FC = () => {
   const { user } = useAuth();
@@ -45,6 +46,7 @@ export const MainLayout: React.FC = () => {
   };
 
   const hasAdminAccess = user?.role === 'owner' || user?.role === 'director';
+  const hasActivityAccess = ['owner', 'director', 'vice_director'].includes(user?.role || '');
   const hasDocumentsAccess = isOnService && (
     ['vice_director', 'director', 'owner'].includes(user?.role || '') ||
     (['probation', 'employee'].includes(user?.role || '') && user?.employeeType === 'dealer')
@@ -57,7 +59,9 @@ export const MainLayout: React.FC = () => {
       {!isSidebarOpen && <button onClick={() => setIsSidebarOpen(true)} aria-label="Apri barra laterale" className="absolute left-0 top-1/2 z-10 hidden h-12 w-11 -translate-y-1/2 items-center justify-center rounded-r-lg bg-white text-amber-500 shadow-md lg:flex"><ChevronRight className="h-5 w-5" /></button>}
       <Header />
       <div className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
-        {currentPage === 'dashboard' ? <Dashboard /> : currentPage === 'shifts' ? (
+        {currentPage === 'dashboard' ? <Dashboard /> : currentPage === 'activity' ? (
+          hasActivityAccess ? <ActivityPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Non hai i permessi per accedere a questa sezione.</p></div></div>
+        ) : currentPage === 'shifts' ? (
           <ShiftsPage />
         ) : currentPage === 'announcements' ? (
           <AnnouncementsPage />
