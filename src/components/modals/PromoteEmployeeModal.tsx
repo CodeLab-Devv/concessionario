@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { User } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { parseAvailability, AVAILABILITY_DAYS } from '../AvailabilityEditor';
+import { EmployeeWarningsSection } from '../EmployeeWarningsSection';
 import { X, UserCheck, Crown, Star, Award, Shield, Trash2, Clock, CheckCircle2, XCircle, Car, CalendarDays } from 'lucide-react';
 import { useNotifications } from '../ui/NotificationManager';
 import { useDialogs } from '../ui/DialogManager';
@@ -87,7 +88,7 @@ export const PromoteEmployeeModal: React.FC<PromoteEmployeeModalProps> = ({ isOp
     <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="modal-shell flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
         <header className="flex shrink-0 items-center justify-between border-b border-gray-200 p-5">
-          <div><h3 className="text-lg font-semibold text-gray-900">Gestisci Dipendente</h3><p className="text-xs text-gray-500">Ruolo, servizio e disponibilità</p></div>
+          <div><h3 className="text-lg font-semibold text-gray-900">Gestisci Dipendente</h3><p className="text-xs text-gray-500">Ruolo, servizio, disponibilità e richiami</p></div>
           <button type="button" onClick={onClose} aria-label="Chiudi" className="flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
         </header>
 
@@ -119,6 +120,8 @@ export const PromoteEmployeeModal: React.FC<PromoteEmployeeModalProps> = ({ isOp
               {employee.lastServiceStatusChange && <p className="mt-2 text-xs text-gray-500">Ultimo aggiornamento: {new Date(employee.lastServiceStatusChange).toLocaleString('it-IT')}</p>}
             </section>
           )}
+
+          {currentUserRole === 'owner' && <EmployeeWarningsSection employeeId={employee.id} employeeName={employee.name} />}
 
           {!isSelfManagement() && (currentUserRole === 'owner' || currentUserRole === 'director') && (
             <form onSubmit={handleSubmit} className="space-y-4">
