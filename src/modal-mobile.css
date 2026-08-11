@@ -1,0 +1,52 @@
+/* Mobile-first modal behavior for iOS, Android and small screens. */
+.safe-area-overlay {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.safe-area-overlay > .modal-shell {
+  width: min(100%, 64rem);
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+  border-radius: 1rem;
+}
+
+@media (max-width: 639px) {
+  .safe-area-overlay {
+    align-items: flex-end;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .safe-area-overlay > .modal-shell {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem);
+    border-radius: 1.25rem 1.25rem 1rem 1rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .safe-area-overlay > .modal-shell {
+    max-height: calc(100dvh - 2rem);
+  }
+}
+
+@supports not (height: 100dvh) {
+  .safe-area-overlay > .modal-shell {
+    max-height: calc(100vh - 1rem);
+  }
+
+  @media (min-width: 640px) {
+    .safe-area-overlay > .modal-shell {
+      max-height: calc(100vh - 2rem);
+    }
+  }
+}
