@@ -47,13 +47,14 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({
     try {
       setUploading(true);
       
-      if (!file.type.startsWith('image/')) {
-        alert('Per favore seleziona un file immagine valido');
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Formato non supportato. Usa JPG, PNG, GIF o WEBP.');
         return;
       }
       
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Il file deve essere inferiore a 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Il file supera il limite di 10MB. Comprimi l\'immagine e riprova.');
         return;
       }
 
