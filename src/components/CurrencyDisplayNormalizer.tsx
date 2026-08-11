@@ -1,3 +1,4 @@
+import type { FC } from 'react';
 import { useEffect } from 'react';
 
 const CURRENCY_PATTERN = /(?:US\$|USD|€)/g;
@@ -23,7 +24,7 @@ const normalizeTree = (root: Node) => {
   textNodes.forEach(normalizeTextNode);
 };
 
-export const CurrencyDisplayNormalizer: React.FC = () => {
+export const CurrencyDisplayNormalizer: FC = () => {
   useEffect(() => {
     normalizeTree(document.body);
 
