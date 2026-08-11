@@ -8,9 +8,11 @@ import { AnnouncementServiceNotifier } from './AnnouncementServiceNotifier';
 import { Header } from './Header';
 import { ChevronRight, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useServiceStatus } from '../hooks/useServiceStatus';
 
 export const MainLayout: React.FC = () => {
   const { user } = useAuth();
+  const isOnService = useServiceStatus(user);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'admin' | 'documents' | 'announcements'>('dashboard');
 
@@ -20,17 +22,31 @@ export const MainLayout: React.FC = () => {
     if (savedPage && allowed.includes(savedPage)) setCurrentPage(savedPage);
   }, []);
 
+  useEffect(() => {
+    if (currentPage === 'announcements' && !isOnService) {
+      setCurrentPage('dashboard');
+      localStorage.setItem('currentPage', 'dashboard');
+    }
+  }, [currentPage, isOnService]);
+
   const handlePageChange = (page: 'dashboard' | 'admin' | 'documents' | 'announcements') => {
+    if (page === 'announcements' && !isOnService) {
+      setCurrentPage('dashboard');
+      localStorage.setItem('currentPage', 'dashboard');
+      setIsSidebarOpen(false);
+      return;
+    }
     setCurrentPage(page);
     setIsSidebarOpen(false);
     localStorage.setItem('currentPage', page);
   };
 
   const hasAdminAccess = user?.role === 'owner' || user?.role === 'director';
-  const hasDocumentsAccess = user?.isOnService && (
+  const hasDocumentsAccess = isOnService && (
     ['vice_director', 'director', 'owner'].includes(user?.role || '') ||
     (['probation', 'employee'].includes(user?.role || '') && user?.employeeType === 'dealer')
   );
+  const hasAnnouncementsAccess = isOnService && ['owner', 'director', 'vice_director'].includes(user?.role || '');
 
   return (
     <div className="app-viewport-height flex bg-gray-50">
@@ -41,7 +57,7 @@ export const MainLayout: React.FC = () => {
         <Header />
         <div className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
           {currentPage === 'dashboard' ? <Dashboard /> : currentPage === 'announcements' ? (
-            <AnnouncementsPage />
+            hasAnnouncementsAccess ? <AnnouncementsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Sezione non disponibile</h3><p className="text-gray-600">Devi essere in servizio per visualizzare gli annunci.</p></div></div>
           ) : currentPage === 'documents' ? (
             hasDocumentsAccess ? <DocumentsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo concessionari possono accedere a questa sezione.</p></div></div>
           ) : hasAdminAccess ? <AdminPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo proprietari e direttori possono accedere a questa sezione.</p></div></div>}
