@@ -1,20 +1,22 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Users, DollarSign, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, ChevronLeft, Megaphone } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
-  currentPage: 'dashboard' | 'admin' | 'documents';
-  onPageChange: (page: 'dashboard' | 'admin' | 'documents') => void;
+  currentPage: 'dashboard' | 'admin' | 'documents' | 'announcements';
+  onPageChange: (page: 'dashboard' | 'admin' | 'documents' | 'announcements') => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage, onPageChange }) => {
   const { user } = useAuth();
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
+  const canAccessAnnouncements = ['owner', 'director', 'vice_director'].includes(user?.role || '');
 
   const menuItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard, page: 'dashboard' as const },
+    ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', icon: Megaphone, page: 'announcements' as const }] : []),
     ...(canAccessAdmin ? [{ id: 'admin', label: 'Stipendi', icon: DollarSign, page: 'admin' as const }] : []),
   ];
 
