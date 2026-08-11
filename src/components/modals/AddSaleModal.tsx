@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Sale } from '../../types';
@@ -18,9 +19,14 @@ interface AddSaleModalProps {
   onAdd: (sale: Omit<Sale, 'id'>) => void;
 }
 
-export const AddSaleModal: React.FC<AddSaleModalProps> = ({ isOpen, onClose, onAdd }) => {
+export const AddSaleModal: React.FC<AddSaleModalProps> = ({
+  isOpen,
+  onClose,
+  onAdd,
+}) => {
   const { user } = useAuth();
   const { showError } = useNotifications();
+
   const [itemName, setItemName] = useState('');
   const [carModel, setCarModel] = useState('');
   const [vehicleCategory, setVehicleCategory] = useState('');
@@ -28,45 +34,58 @@ export const AddSaleModal: React.FC<AddSaleModalProps> = ({ isOpen, onClose, onA
   const [quantity, setQuantity] = useState('1');
   const [loading, setLoading] = useState(false);
   const [, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [discountType, setDiscountType] = useState<
+    'employee' | 'collaboration' | null
+  >(null);
+
   const category = 'concessionari';
-  const [discountType, setDiscountType] = useState<'employee' | 'collaboration' | null>(null);
 
   const handleVehicleSelect = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
     setItemName(vehicle.name);
     setPrice(vehicle.price.toString());
     setVehicleCategory(vehicle.type);
+
     if (!carModel.trim()) {
       setCarModel(vehicle.name);
     }
   };
 
-  const calculateTotal = (price: number, qty: number) => {
-    let total = price * qty;
+  const calculateTotal = (vehiclePrice: number, qty: number) => {
+    let total = vehiclePrice * qty;
+
     if (discountType === 'employee') {
       total *= 0.8;
     } else if (discountType === 'collaboration') {
       total *= 0.7;
     }
+
     return total;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (loading) return;
+
     setLoading(true);
 
     try {
       if (!user) {
         throw new Error('Utente non autenticato');
       }
-      const priceNum = parseFloat(price);
-      const quantityNum = parseInt(quantity);
-      if (isNaN(priceNum) || priceNum <= 0) {
+
+      const priceNum = Number.parseFloat(price);
+      const quantityNum = Number.parseInt(quantity, 10);
+
+      if (!Number.isFinite(priceNum) || priceNum <= 0) {
         throw new Error('Prezzo non valido');
       }
-      if (isNaN(quantityNum) || quantityNum <= 0) {
+
+      if (!Number.isInteger(quantityNum) || quantityNum <= 0) {
         throw new Error('Quantità non valida');
       }
+
       const total = calculateTotal(priceNum, quantityNum);
 
       const newSale: Omit<Sale, 'id'> = {
@@ -81,15 +100,22 @@ export const AddSaleModal: React.FC<AddSaleModalProps> = ({ isOpen, onClose, onA
         type: 'sale',
         category,
         discountType: discountType || undefined,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
 
       await onAdd(newSale);
+
       resetForm();
       onClose();
     } catch (error) {
       console.error('Error adding sale:', error);
-      showError('Errore', (error as Error).message || 'Impossibile aggiungere la vendita');
+
+      showError(
+        'Errore',
+        error instanceof Error
+          ? error.message
+          : 'Impossibile aggiungere la vendita',
+      );
     } finally {
       setLoading(false);
     }
@@ -102,204 +128,427 @@ export const AddSaleModal: React.FC<AddSaleModalProps> = ({ isOpen, onClose, onA
     setPrice('');
     setQuantity('1');
     setSelectedVehicle(null);
-    setLoading(false);
     setDiscountType(null);
+    setLoading(false);
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+
+    resetForm();
+    onClose();
   };
 
   if (!isOpen) return null;
 
+  const currentPrice = Number.parseFloat(price) || 0;
+  const currentQuantity = Number.parseInt(quantity, 10) || 1;
+  const total = calculateTotal(currentPrice, currentQuantity);
+
   return (
-    <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="modal-shell w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h3 className="text-lg font-semibold text-gray-900">Report vendita</h3>
+    <div
+      className="
+        fixed inset-0 z-50
+        flex items-end justify-center
+        bg-black/50
+        p-0
+        sm:items-center sm:p-4
+        overscroll-contain
+      "
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-sale-title"
+    >
+      <div
+        className="
+          flex w-full flex-col overflow-hidden
+          rounded-t-3xl bg-white shadow-2xl
+          sm:max-h-[92dvh] sm:max-w-3xl sm:rounded-2xl
+        "
+        style={{
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))',
+        }}
+      >
+        {/* HEADER */}
+        <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+          <div className="min-w-0">
+            <h2
+              id="add-sale-title"
+              className="truncate text-lg font-bold text-gray-900 sm:text-xl"
+            >
+              Nuova vendita
+            </h2>
+
+            <p className="mt-0.5 text-xs text-gray-500 sm:text-sm">
+              Registra una nuova vendita
+            </p>
+          </div>
+
           <button
             type="button"
-            onClick={() => {
-              resetForm();
-              onClose();
-            }}
+            onClick={handleClose}
+            disabled={loading}
             aria-label="Chiudi"
-            className="flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600"
+            className="
+              ml-3 flex h-11 w-11 shrink-0
+              items-center justify-center rounded-xl
+              text-gray-500 transition
+              hover:bg-gray-100 hover:text-gray-900
+              active:bg-gray-200
+              disabled:cursor-not-allowed disabled:opacity-50
+            "
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
+        </header>
+
+        {/* SCROLL AREA */}
+        <div
+          className="
+            min-h-0 flex-1
+            overflow-y-auto overscroll-contain
+            px-4 py-4
+            sm:px-6 sm:py-5
+          "
+          style={{
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          <form
+            id="add-sale-form"
+            onSubmit={handleSubmit}
+            className="space-y-4 pb-2 sm:space-y-5"
+          >
+            {/* RICERCA VEICOLO */}
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+              <label className="mb-2 block text-sm font-semibold text-gray-700">
+                Cerca veicolo
+              </label>
+
+              <VehicleSearch
+                onVehicleSelect={handleVehicleSelect}
+                disabled={loading}
+              />
+            </section>
+
+            {/* DATI VEICOLO */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-gray-900">
+                  Dati veicolo
+                </h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Informazioni del veicolo venduto
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* MODELLO */}
+                <div>
+                  <label
+                    htmlFor="itemName"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Modello
+                  </label>
+
+                  <div className="relative">
+                    <Package className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <input
+                      id="itemName"
+                      type="text"
+                      required
+                      disabled={loading}
+                      value={itemName}
+                      onChange={(event) => setItemName(event.target.value)}
+                      placeholder="Modello veicolo"
+                      className="
+                        h-12 w-full rounded-xl
+                        border border-gray-300
+                        bg-white pl-10 pr-3
+                        text-sm text-gray-900
+                        outline-none transition
+                        focus:border-blue-500
+                        focus:ring-2 focus:ring-blue-100
+                        disabled:bg-gray-100
+                      "
+                    />
+                  </div>
+                </div>
+
+                {/* CATEGORIA */}
+                <div>
+                  <label
+                    htmlFor="carType"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Categoria
+                  </label>
+
+                  <div className="relative">
+                    <Car className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <input
+                      id="carType"
+                      type="text"
+                      value={vehicleCategory}
+                      readOnly
+                      placeholder="Categoria veicolo"
+                      className="
+                        h-12 w-full rounded-xl
+                        border border-gray-300
+                        bg-gray-50 pl-10 pr-3
+                        text-sm text-gray-600
+                        outline-none
+                      "
+                    />
+                  </div>
+                </div>
+
+                {/* MODELLO AUTO */}
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="carModel"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Modello auto
+                  </label>
+
+                  <div className="relative">
+                    <Package className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <input
+                      id="carModel"
+                      type="text"
+                      required
+                      disabled={loading}
+                      value={carModel}
+                      onChange={(event) => setCarModel(event.target.value)}
+                      placeholder="Es. BMW X5, Mercedes C-Class"
+                      className="
+                        h-12 w-full rounded-xl
+                        border border-gray-300
+                        bg-white pl-10 pr-3
+                        text-sm text-gray-900
+                        outline-none transition
+                        focus:border-blue-500
+                        focus:ring-2 focus:ring-blue-100
+                        disabled:bg-gray-100
+                      "
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* PAGAMENTO */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-gray-900">
+                  Pagamento
+                </h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Prezzo, quantità e totale della vendita
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {/* PREZZO */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Prezzo
+                  </label>
+
+                  <div className="relative">
+                    <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <div className="flex h-12 w-full items-center rounded-xl border border-gray-300 bg-gray-50 pl-10 pr-3 text-sm font-semibold text-gray-700">
+                      €{Math.round(currentPrice).toLocaleString('it-IT')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* QUANTITÀ */}
+                <div>
+                  <label
+                    htmlFor="quantity"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Quantità
+                  </label>
+
+                  <div className="relative">
+                    <Hash className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      required
+                      disabled={loading}
+                      value={quantity}
+                      onChange={(event) => setQuantity(event.target.value)}
+                      placeholder="1"
+                      className="
+                        h-12 w-full rounded-xl
+                        border border-gray-300
+                        bg-white pl-10 pr-3
+                        text-sm text-gray-900
+                        outline-none transition
+                        focus:border-blue-500
+                        focus:ring-2 focus:ring-blue-100
+                        disabled:bg-gray-100
+                      "
+                    />
+                  </div>
+                </div>
+
+                {/* TOTALE */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Totale
+                  </label>
+
+                  <div className="relative">
+                    <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+
+                    <div className="flex h-12 w-full items-center rounded-xl border border-emerald-200 bg-emerald-50 pl-10 pr-3 text-sm font-bold text-emerald-700">
+                      €{Math.round(total).toLocaleString('it-IT')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* SCONTO */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+              <div className="mb-3">
+                <h3 className="text-sm font-bold text-gray-900">
+                  Sconto
+                </h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Seleziona una sola tipologia
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setDiscountType('employee')}
+                  className={`
+                    min-h-12 rounded-xl px-4 py-2
+                    text-sm font-semibold transition
+                    active:scale-[0.98]
+                    disabled:cursor-not-allowed disabled:opacity-50
+                    ${
+                      discountType === 'employee'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }
+                  `}
+                >
+                  Dipendente · 20%
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setDiscountType('collaboration')}
+                  className={`
+                    min-h-12 rounded-xl px-4 py-2
+                    text-sm font-semibold transition
+                    active:scale-[0.98]
+                    disabled:cursor-not-allowed disabled:opacity-50
+                    ${
+                      discountType === 'collaboration'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }
+                  `}
+                >
+                  Collaborazione · 30%
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setDiscountType(null)}
+                  className={`
+                    min-h-12 rounded-xl px-4 py-2
+                    text-sm font-semibold transition
+                    active:scale-[0.98]
+                    disabled:cursor-not-allowed disabled:opacity-50
+                    ${
+                      discountType === null
+                        ? 'bg-gray-700 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }
+                  `}
+                >
+                  Nessuno
+                </button>
+              </div>
+            </section>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Ricerca veicoli */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cerca Veicolo
-            </label>
-            <VehicleSearch 
-              onVehicleSelect={handleVehicleSelect}
-              disabled={false}
-            />
-          </div>
-
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="itemName" className="block text-sm font-medium text-gray-700 mb-2">
-                Modello
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Package className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="itemName"
-                  type="text"
-                  required
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Modello veicolo"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="carType" className="block text-sm font-medium text-gray-700 mb-2">
-                Categoria
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Car className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="carType"
-                  type="text"
-                  value={vehicleCategory}
-                  readOnly
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Categoria veicolo"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Campo Modello Auto */}
-          <div>
-            <label htmlFor="carModel" className="block text-sm font-medium text-gray-700 mb-2">
-              Modello Auto
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Package className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="carModel"
-                type="text"
-                required
-                value={carModel}
-                onChange={(e) => setCarModel(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Es. BMW X5, Mercedes C-Class"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Prezzo (€)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <DollarSign className="h-5 w-5 text-gray-400" />
-              </div>
-              <div className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600">
-                €{Math.round(parseFloat(price) || 0).toLocaleString()}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-2">
-              Quantità
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Hash className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="quantity"
-                type="number"
-                min="1"
-                required
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="1"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Totale (€)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <DollarSign className="h-5 w-5 text-gray-400" />
-              </div>
-              <div className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-semibold">
-                €{Math.round(calculateTotal(parseFloat(price) || 0, parseInt(quantity) || 1)).toLocaleString()}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sconto</label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setDiscountType('employee')}
-                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'employee'
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700'}`}
-              >
-                Dipendente (20%)
-              </button>
-              <button
-                type="button"
-                onClick={() => setDiscountType('collaboration')}
-                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'collaboration'
-                  ? 'bg-purple-600 text-white' 
-                  : 'bg-gray-200 text-gray-700'}`}
-              >
-                Collaborazione (30%)
-              </button>
-              <button
-                type="button"
-                onClick={() => setDiscountType(null)}
-                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${!discountType
-                  ? 'bg-gray-600 text-white' 
-                  : 'bg-gray-200 text-gray-700'}`}
-              >
-                Nessuno
-              </button>
-            </div>
-          </div>
-
-          <div className="flex space-x-3 pt-4">
+        {/* FOOTER */}
+        <footer
+          className="
+            shrink-0 border-t border-gray-200
+            bg-white px-4 py-3
+            sm:px-6 sm:py-4
+          "
+          style={{
+            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={onClose}
-              className="min-h-11 flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-400"
+              onClick={handleClose}
+              disabled={loading}
+              className="
+                min-h-12 w-full rounded-xl
+                border border-gray-300
+                bg-white px-5
+                text-sm font-semibold text-gray-700
+                transition hover:bg-gray-50
+                active:bg-gray-100
+                disabled:cursor-not-allowed disabled:opacity-50
+                sm:w-auto
+              "
             >
               Annulla
             </button>
+
             <button
               type="submit"
+              form="add-sale-form"
               disabled={loading}
-              className="min-h-11 flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="
+                min-h-12 w-full rounded-xl
+                bg-blue-600 px-6
+                text-sm font-bold text-white
+                shadow-sm transition
+                hover:bg-blue-700
+                active:bg-blue-800
+                disabled:cursor-not-allowed disabled:opacity-50
+                sm:w-auto
+              "
             >
-              {loading ? 'Aggiunta...' : 'Aggiungi'}
+              {loading ? 'Aggiunta...' : 'Aggiungi vendita'}
             </button>
           </div>
-        </form>
+        </footer>
       </div>
     </div>
   );
 };
+
