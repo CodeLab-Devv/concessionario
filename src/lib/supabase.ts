@@ -121,6 +121,19 @@ export type Database = {
         }
         Returns: void
       }
+      save_registration_availability: {
+        Args: {
+          p_email: string
+          p_availability: string
+        }
+        Returns: string
+      }
+      apply_registration_availability: {
+        Args: {
+          p_token: string
+        }
+        Returns: boolean
+      }
     }
   }
 }
