@@ -27,7 +27,6 @@ export const MainLayout: React.FC = () => {
   };
 
   const hasAdminAccess = user?.role === 'owner' || user?.role === 'director';
-  const hasAnnouncementAccess = ['owner', 'director', 'vice_director'].includes(user?.role || '');
   const hasDocumentsAccess = user?.isOnService && (
     ['vice_director', 'director', 'owner'].includes(user?.role || '') ||
     (['probation', 'employee'].includes(user?.role || '') && user?.employeeType === 'dealer')
@@ -42,7 +41,7 @@ export const MainLayout: React.FC = () => {
         <Header />
         <div className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
           {currentPage === 'dashboard' ? <Dashboard /> : currentPage === 'announcements' ? (
-            hasAnnouncementAccess ? <AnnouncementsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo proprietari, direttori e vice direttori possono accedere agli annunci.</p></div></div>
+            <AnnouncementsPage />
           ) : currentPage === 'documents' ? (
             hasDocumentsAccess ? <DocumentsPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo concessionari possono accedere a questa sezione.</p></div></div>
           ) : hasAdminAccess ? <AdminPage /> : <div className="flex h-64 items-center justify-center"><div className="text-center"><h3 className="mb-2 text-lg font-semibold text-gray-900">Accesso Negato</h3><p className="text-gray-600">Solo proprietari e direttori possono accedere a questa sezione.</p></div></div>}
