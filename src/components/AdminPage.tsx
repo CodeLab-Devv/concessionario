@@ -1,20 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { useDialogs } from './ui/DialogManager';
-import { 
-  DollarSign, 
-  Users, 
-  TrendingUp, 
-  Edit3, 
-  Save, 
+import {
+  DollarSign,
+  Users,
+  TrendingUp,
+  Edit3,
+  Save,
   X,
   Crown,
   Shield,
   Award,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
+
+interface AvailabilityDay {
+  enabled?: boolean;
+  start?: string;
+  end?: string;
+}
+
+type Availability = Record<string, AvailabilityDay>;
 
 interface EmployeeRevenue {
   id: string;
@@ -23,7 +33,18 @@ interface EmployeeRevenue {
   role: 'owner' | 'director' | 'vice_director' | 'employee' | 'probation';
   revenue: number;
   commission: number;
+  availability: Availability;
 }
+
+const WEEKDAYS: Array<{ key: string; label: string }> = [
+  { key: 'monday', label: 'Lun' },
+  { key: 'tuesday', label: 'Mar' },
+  { key: 'wednesday', label: 'Mer' },
+  { key: 'thursday', label: 'Gio' },
+  { key: 'friday', label: 'Ven' },
+  { key: 'saturday', label: 'Sab' },
+  { key: 'sunday', label: 'Dom' }
+];
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('it-IT', {
@@ -44,6 +65,17 @@ const getDefaultCommission = (role: EmployeeRevenue['role']) => {
   }
 };
 
+const formatAvailability = (availability: Availability) =>
+  WEEKDAYS
+    .map(({ key, label }) => {
+      const day = availability?.[key];
+      if (!day?.enabled) return null;
+      const start = day.start || '--:--';
+      const end = day.end || '--:--';
+      return `${label} ${start}-${end}`;
+    })
+    .filter(Boolean) as string[];
+
 export const AdminPage: React.FC = () => {
   const { user, resetAllData } = useAuth();
   const { showConfirm } = useDialogs();
@@ -53,7 +85,6 @@ export const AdminPage: React.FC = () => {
   const [tempCommission, setTempCommission] = useState<number>(0);
   const [resetting, setResetting] = useState(false);
 
-  // Check if user has admin access
   const hasAdminAccess = user?.role === 'owner' || user?.role === 'director';
 
   const fetchEmployeesRevenue = useCallback(async () => {
@@ -66,7 +97,6 @@ export const AdminPage: React.FC = () => {
 
     try {
       setLoading(true);
-
       const [
         { data: usersData, error: usersError },
         { data: salesData, error: salesError }
@@ -88,16 +118,15 @@ export const AdminPage: React.FC = () => {
         );
       }
 
-      const employeesWithRevenue: EmployeeRevenue[] = (usersData || []).map(emp => {
-        return {
-          id: emp.id,
-          name: emp.name,
-          email: emp.email,
-          role: emp.role,
-          revenue: revenueByEmployee.get(emp.id) || 0,
-          commission: getDefaultCommission(emp.role)
-        };
-      });
+      const employeesWithRevenue: EmployeeRevenue[] = (usersData || []).map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        email: emp.email,
+        role: emp.role,
+        revenue: revenueByEmployee.get(emp.id) || 0,
+        commission: getDefaultCommission(emp.role),
+        availability: (emp.availability && typeof emp.availability === 'object' ? emp.availability : {}) as Availability
+      }));
 
       setEmployees(employeesWithRevenue);
     } catch (error) {
@@ -109,8 +138,20 @@ export const AdminPage: React.FC = () => {
   }, [hasAdminAccess]);
 
   useEffect(() => {
-    fetchEmployeesRevenue();
+    void fetchEmployeesRevenue();
   }, [fetchEmployeesRevenue]);
+
+  const handleUsersRealtimeChange = useCallback(async () => {
+    await fetchEmployeesRevenue();
+  }, [fetchEmployeesRevenue]);
+
+  useRealtimeSubscription({
+    table: 'users',
+    onInsert: handleUsersRealtimeChange,
+    onUpdate: handleUsersRealtimeChange,
+    onDelete: handleUsersRealtimeChange,
+    enabled: hasAdminAccess
+  });
 
   const handleEditCommission = (employeeId: string, currentCommission: number) => {
     setEditingCommission(employeeId);
@@ -118,13 +159,9 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleSaveCommission = (employeeId: string) => {
-    setEmployees(prev => 
-      prev.map(emp => 
-        emp.id === employeeId 
-          ? { ...emp, commission: tempCommission }
-          : emp
-      )
-    );
+    setEmployees(prev => prev.map(emp =>
+      emp.id === employeeId ? { ...emp, commission: tempCommission } : emp
+    ));
     setEditingCommission(null);
   };
 
@@ -135,22 +172,13 @@ export const AdminPage: React.FC = () => {
 
   const verifyDataDeletion = async () => {
     try {
-      // Check if data was actually deleted
       const [salesCheck, logsCheck] = await Promise.all([
         supabase.from('sales').select('id', { count: 'exact', head: true }),
         supabase.from('activity_logs').select('id', { count: 'exact', head: true })
       ]);
-
       const salesCount = salesCheck.count || 0;
       const logsCount = logsCheck.count || 0;
-
-      return {
-        success: salesCount === 0,
-        details: {
-          sales: salesCount,
-          logs: logsCount
-        }
-      };
+      return { success: salesCount === 0, details: { sales: salesCount, logs: logsCount } };
     } catch (error) {
       console.error('Error verifying data deletion:', error);
       return { success: false, details: null };
@@ -159,7 +187,6 @@ export const AdminPage: React.FC = () => {
 
   const handleResetAll = async () => {
     if (resetting) return;
-    
     const confirmed = await showConfirm({
       title: 'Ripristina Tutti i Dati',
       message: 'Sei sicuro di voler ripristinare tutti i dati? Questa azione cancellerà tutte le vendite e i log di attività. Questa operazione non può essere annullata.',
@@ -168,10 +195,7 @@ export const AdminPage: React.FC = () => {
       type: 'danger',
       icon: 'warning'
     });
-    
     if (!confirmed) return;
-    
-    // Check if resetAllData function is available
     if (!resetAllData) {
       await showConfirm({
         title: 'Errore',
@@ -180,53 +204,27 @@ export const AdminPage: React.FC = () => {
       });
       return;
     }
-    
     try {
       setResetting(true);
       const success = await resetAllData();
-      
       if (success) {
-        // Verify that data was actually deleted
         const verification = await verifyDataDeletion();
-        
-        if (verification.success) {
-          await showConfirm({
-            title: 'Reset Completato',
-            message: `Dati ripristinati con successo!\n\n✅ Vendite cancellate: ${verification.details?.sales || 0}\n✅ Log attività: ${verification.details?.logs || 0}`,
-            confirmText: 'OK',
-            type: 'info',
-            icon: 'info'
-          });
-        } else {
-          await showConfirm({
-            title: 'Attenzione',
-            message: `Reset parzialmente completato. Alcuni dati potrebbero essere ancora presenti:\n\n📊 Vendite rimanenti: ${verification.details?.sales || 'N/A'}\n📝 Log attività: ${verification.details?.logs || 'N/A'}`,
-            confirmText: 'OK',
-            type: 'warning',
-            icon: 'warning'
-          });
-        }
-        
-        // Refresh the page data
+        await showConfirm({
+          title: verification.success ? 'Reset Completato' : 'Attenzione',
+          message: verification.success
+            ? `Dati ripristinati con successo!\n\n✅ Vendite cancellate: ${verification.details?.sales || 0}\n✅ Log attività: ${verification.details?.logs || 0}`
+            : `Reset parzialmente completato.\n\n📊 Vendite rimanenti: ${verification.details?.sales || 'N/A'}\n📝 Log attività: ${verification.details?.logs || 'N/A'}`,
+          confirmText: 'OK',
+          type: verification.success ? 'info' : 'warning',
+          icon: verification.success ? 'info' : 'warning'
+        });
         await fetchEmployeesRevenue();
       } else {
-        await showConfirm({
-          title: 'Errore',
-          message: 'Errore durante il ripristino dei dati. Controlla la console per maggiori dettagli.',
-          confirmText: 'OK',
-          type: 'danger',
-          icon: 'warning'
-        });
+        await showConfirm({ title: 'Errore', message: 'Errore durante il ripristino dei dati. Controlla la console per maggiori dettagli.', confirmText: 'OK', type: 'danger', icon: 'warning' });
       }
     } catch (error) {
       console.error('Error during reset:', error);
-      await showConfirm({
-        title: 'Errore',
-        message: 'Errore durante il ripristino dei dati.',
-        confirmText: 'OK',
-        type: 'danger',
-        icon: 'warning'
-      });
+      await showConfirm({ title: 'Errore', message: 'Errore durante il ripristino dei dati.', confirmText: 'OK', type: 'danger', icon: 'warning' });
     } finally {
       setResetting(false);
     }
@@ -254,7 +252,6 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  // Calculate total statistics
   const totalRevenue = employees.reduce((sum, emp) => sum + emp.revenue, 0);
   const totalCommissions = employees.reduce((sum, emp) => sum + (emp.revenue * emp.commission / 100), 0);
 
@@ -271,175 +268,54 @@ export const AdminPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>;
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-yellow-500 to-amber-600 rounded-xl p-6 text-white">
-        <div className="flex items-center space-x-4">
-          <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
-            <DollarSign className="h-8 w-8" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Gestione Stipendi</h1>
-            <p className="text-yellow-100">Gestione fatturato e commissioni dipendenti</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-gradient-to-r from-yellow-500 to-amber-600 rounded-xl p-6 text-white">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Fatturato Totale</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
-            </div>
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm"><DollarSign className="h-8 w-8" /></div>
+            <div><h1 className="text-2xl font-bold">Gestione Stipendi</h1><p className="text-yellow-100">Gestione fatturato, commissioni e disponibilità dipendenti</p></div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Stipendi da saldare</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCommissions)}</p>
-              </div>
-            </div>
-            <button 
-              onClick={handleResetAll}
-              disabled={resetting}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors duration-200 flex items-center space-x-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${resetting ? 'animate-spin' : ''}`} />
-              <span>{resetting ? 'Ripristinando...' : 'Ripristina'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Dipendenti Concessionario Aurum Motors */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Dipendenti Aurum Motors</h2>
-          <p className="text-sm text-gray-600">Gestisci commissioni e visualizza performance del concessionario</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl shadow-lg p-6"><div className="flex items-center space-x-4"><div className="p-3 bg-green-100 rounded-lg"><TrendingUp className="h-6 w-6 text-green-600" /></div><div><p className="text-sm text-gray-600">Fatturato Totale</p><p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p></div></div></div>
+          <div className="bg-white rounded-xl shadow-lg p-6"><div className="flex items-center justify-between"><div className="flex items-center space-x-4"><div className="p-3 bg-purple-100 rounded-lg"><DollarSign className="h-6 w-6 text-purple-600" /></div><div><p className="text-sm text-gray-600">Stipendi da saldare</p><p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCommissions)}</p></div></div><button onClick={handleResetAll} disabled={resetting} className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors duration-200 flex items-center space-x-2"><RefreshCw className={`h-4 w-4 ${resetting ? 'animate-spin' : ''}`} /><span>{resetting ? 'Ripristinando...' : 'Ripristina'}</span></button></div></div>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="min-w-full inline-block align-middle">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200"><h2 className="text-lg font-semibold text-gray-900">Dipendenti Aurum Motors</h2><p className="text-sm text-gray-600">Dati aggiornati automaticamente in tempo reale.</p></div>
+          <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dipendente
-                  </th>
-                  <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ruolo/Tipo
-                  </th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fatturato
-                  </th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Commissione
-                  </th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Totale
-                  </th>
-                </tr>
-              </thead>
+              <thead className="bg-gray-50"><tr>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dipendente</th>
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ruolo/Tipo</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disponibilità</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fatturato</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commissione</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Totale</th>
+              </tr></thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {employees.map((employee) => (
-                  <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="px-3 sm:px-6 py-4">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">{employee.name}</div>
-                        <div className="text-xs sm:text-sm text-gray-500 truncate">{employee.email}</div>
-                        <div className="sm:hidden mt-1 flex items-center space-x-1">
-                          {getRoleIcon(employee.role)}
-                          <span className="text-xs text-gray-600">{getRoleLabel(employee.role)}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        {getRoleIcon(employee.role)}
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-900">
-                            {getRoleLabel(employee.role)}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Concessionario
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-6 py-4">
-                      <div className="text-sm font-bold text-gray-900">
-                        {formatCurrency(employee.revenue)}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-6 py-4">
-                      {editingCommission === employee.id ? (
-                        <div className="flex items-center space-x-1 sm:space-x-2">
-                          <input
-                            type="number"
-                            value={tempCommission}
-                            onChange={(e) => setTempCommission(Number(e.target.value))}
-                            className="w-12 px-1 py-2 text-base border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-16 sm:px-2 sm:py-1 sm:text-sm"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                          />
-                          <button
-                            onClick={() => handleSaveCommission(employee.id)}
-                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-green-600 hover:text-green-800"
-                          >
-                            <Save className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-red-600 hover:text-red-800"
-                          >
-                            <X className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1 sm:space-x-2">
-                          <span className="text-xs sm:text-sm text-gray-900">{employee.commission}%</span>
-                          <button
-                            onClick={() => handleEditCommission(employee.id, employee.commission)}
-                            className="flex min-h-11 min-w-11 items-center justify-center p-1 text-amber-600 hover:text-amber-800"
-                          >
-                            <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 sm:px-6 py-4">
-                      <div className="text-sm font-medium text-green-600">
-                        {formatCurrency(employee.revenue * employee.commission / 100)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {employees.map(employee => {
+                  const schedule = formatAvailability(employee.availability);
+                  return (
+                    <tr key={employee.id} className="hover:bg-gray-50">
+                      <td className="px-3 sm:px-6 py-4"><div className="min-w-0"><div className="text-sm font-medium text-gray-900 truncate">{employee.name}</div><div className="text-xs sm:text-sm text-gray-500 truncate">{employee.email}</div><div className="sm:hidden mt-1 flex items-center space-x-1">{getRoleIcon(employee.role)}<span className="text-xs text-gray-600">{getRoleLabel(employee.role)}</span></div></div></td>
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4"><div className="flex items-center space-x-2">{getRoleIcon(employee.role)}<div><div className="text-sm font-medium text-gray-900">{getRoleLabel(employee.role)}</div><div className="text-sm text-gray-500">Concessionario</div></div></div></td>
+                      <td className="px-3 sm:px-6 py-4"><div className="min-w-[180px]">{schedule.length ? <div className="space-y-1">{schedule.map(day => <div key={day} className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-700"><Clock className="h-3.5 w-3.5 text-amber-600" />{day}</div>)}</div> : <span className="text-xs sm:text-sm text-gray-400">Non impostata</span>}</div></td>
+                      <td className="px-3 sm:px-6 py-4"><div className="text-sm font-bold text-gray-900">{formatCurrency(employee.revenue)}</div></td>
+                      <td className="px-3 sm:px-6 py-4">{editingCommission === employee.id ? <div className="flex items-center space-x-1 sm:space-x-2"><input type="number" value={tempCommission} onChange={e => setTempCommission(Number(e.target.value))} className="w-12 px-1 py-2 text-base border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-16 sm:px-2 sm:py-1 sm:text-sm" min="0" max="100" step="0.1" /><button onClick={() => handleSaveCommission(employee.id)} className="flex min-h-11 min-w-11 items-center justify-center p-1 text-green-600 hover:text-green-800"><Save className="h-3 w-3 sm:h-4 sm:w-4" /></button><button onClick={handleCancelEdit} className="flex min-h-11 min-w-11 items-center justify-center p-1 text-red-600 hover:text-red-800"><X className="h-3 w-3 sm:h-4 sm:w-4" /></button></div> : <div className="flex items-center space-x-1 sm:space-x-2"><span className="text-xs sm:text-sm text-gray-900">{employee.commission}%</span><button onClick={() => handleEditCommission(employee.id, employee.commission)} className="flex min-h-11 min-w-11 items-center justify-center p-1 text-amber-600 hover:text-amber-800"><Edit3 className="h-3 w-3 sm:h-4 sm:w-4" /></button></div>}</td>
+                      <td className="px-3 sm:px-6 py-4"><div className="text-sm font-medium text-green-600">{formatCurrency(employee.revenue * employee.commission / 100)}</div></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
