@@ -21,14 +21,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | undefined>(user?.avatar_url);
   const [formData, setFormData] = useState({
-    name: '', availability: '', currentPassword: '', newPassword: '', confirmPassword: ''
+    name: '', email: '', availability: '', currentPassword: '', newPassword: '', confirmPassword: ''
   });
 
   useEffect(() => {
     if (!user || !isOpen) return;
     setFormData({
-      name: user.name || '',
-      availability: user.availability || '',
+      name: user.name || '', email: user.email || '', availability: user.availability || '',
       currentPassword: '', newPassword: '', confirmPassword: ''
     });
     setCurrentAvatarUrl(user.avatar_url);
@@ -48,10 +47,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     try {
       const updates: { name?: string; availability?: string } = {};
       const name = formData.name.trim();
+      const email = formData.email.trim().toLowerCase();
       const availability = formData.availability.trim();
 
       if (name !== user.name) updates.name = name;
       if (availability !== (user.availability || '')) updates.availability = availability;
+
+      if (email !== user.email.toLowerCase()) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          throw new Error('Inserisci un indirizzo email valido.');
+        }
+
+        const { error: emailError } = await supabase.auth.updateUser({ email });
+        if (emailError) throw new Error(`Impossibile cambiare email: ${emailError.message}`);
+
+        showSuccess('Email aggiornata', 'Controlla la nuova casella email e conferma il nuovo indirizzo.');
+      }
 
       if (Object.keys(updates).length > 0) {
         const { error } = await supabase.from('users').update(updates).eq('id', user.id);
@@ -63,14 +74,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         if (formData.newPassword !== formData.confirmPassword) throw new Error('Le nuove password non coincidono.');
         if (formData.newPassword.length < 6) throw new Error('La nuova password deve avere almeno 6 caratteri.');
 
-        // Supabase supporta la verifica della password attuale direttamente nell'update.
         const { error: passwordError } = await supabase.auth.updateUser({
           password: formData.newPassword,
           current_password: formData.currentPassword,
         } as Parameters<typeof supabase.auth.updateUser>[0]);
 
         if (passwordError) {
-          // Fallback per progetti Supabase che richiedono una sessione recentemente autenticata.
           const { error: reauthError } = await supabase.auth.signInWithPassword({
             email: user.email,
             password: formData.currentPassword,
@@ -82,13 +91,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         }
       }
 
-      if (Object.keys(updates).length === 0 && !formData.newPassword) {
+      if (Object.keys(updates).length === 0 && !formData.newPassword && email === user.email.toLowerCase()) {
         showError('Nessuna modifica', 'Non sono state rilevate modifiche da salvare.');
         return;
       }
 
       await refreshUserProfile?.();
-      setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
+      setFormData(prev => ({ ...prev, email: email || user.email, currentPassword: '', newPassword: '', confirmPassword: '' }));
       showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
     } catch (error) {
       console.error('Profile update error:', error);
@@ -100,7 +109,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   const handleClose = () => {
     setFormData({
-      name: user?.name || '', availability: user?.availability || '',
+      name: user?.name || '', email: user?.email || '', availability: user?.availability || '',
       currentPassword: '', newPassword: '', confirmPassword: ''
     });
     setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false);
@@ -161,6 +170,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Nome completo</label>
                   <div className="relative"><input required value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500" /><User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /></div>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Email</label>
+                  <div className="relative"><input required type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-10 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500" /><Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /></div>
+                  <p className="mt-2 rounded-lg bg-blue-50 p-2 text-xs text-blue-700">Per sicurezza, Supabase potrebbe richiedere la conferma del nuovo indirizzo email.</p>
                 </div>
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
                   <AvailabilityEditor value={formData.availability} onChange={availability => setFormData(p => ({ ...p, availability }))} />
