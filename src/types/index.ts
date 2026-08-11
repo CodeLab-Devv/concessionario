@@ -8,6 +8,7 @@ export interface User {
   lastServiceStatusChange?: string;
   createdAt: string;
   avatar_url?: string;
+  availability?: string;
 }
 
 export interface Employee {
@@ -22,6 +23,7 @@ export interface Employee {
   isOnService?: boolean;
   lastServiceStatusChange?: string;
   avatar_url?: string;
+  availability?: string;
 }
 
 export interface Sale {
