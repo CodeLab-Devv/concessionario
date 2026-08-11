@@ -1,18 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Plus, Save, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Plus, Save, Trash2, Users, X, Sun, Sunset, Moon, MoonStar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from './Avatar';
 
 interface UserRow { id: string; name: string; role: string; avatar_url?: string | null; employee_type?: string | null; }
 interface Shift { id: string; user_id: string; shift_date: string; start_time: string; end_time: string; notes: string | null; }
-
 const HIGH_ROLES = ['owner', 'director', 'vice_director'];
 const ROLE_LABELS: Record<string, string> = { owner: 'Proprietario', director: 'Direttore', vice_director: 'Vice Direttore', employee: 'Dipendente', probation: 'In Prova' };
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 const displayDate = (value: string) => new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${value}T12:00:00`));
 const shortDate = (date: Date) => new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric' }).format(date);
 const normalizeTime = (value: string) => value.length === 5 ? `${value}:00` : value;
+
+type Slot = 'mattino' | 'pomeriggio' | 'sera' | 'tarda_notte';
+const SLOTS: { key: Slot; label: string; subtitle: string; icon: React.ElementType; from: string; to: string }[] = [
+  { key: 'mattino', label: 'Mattino', subtitle: '06:00 — 12:00', icon: Sun, from: '06:00', to: '12:00' },
+  { key: 'pomeriggio', label: 'Pomeriggio', subtitle: '12:00 — 18:00', icon: Sunset, from: '12:00', to: '18:00' },
+  { key: 'sera', label: 'Sera', subtitle: '18:00 — 00:00', icon: Moon, from: '18:00', to: '23:59' },
+  { key: 'tarda_notte', label: 'Tarda notte', subtitle: '00:00 — 06:00', icon: MoonStar, from: '00:00', to: '06:00' },
+];
+
+const getSlot = (start: string): Slot => { const h = Number(start.slice(0, 2)); if (h >= 6 && h < 12) return 'mattino'; if (h >= 12 && h < 18) return 'pomeriggio'; if (h >= 18) return 'sera'; return 'tarda_notte'; };
 
 export const ShiftsPage: React.FC = () => {
   const { user } = useAuth();
@@ -24,97 +33,23 @@ export const ShiftsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Shift | null>(null);
-  const [form, setForm] = useState({ userId: '', start: '09:00', end: '18:00', notes: '' });
+  const [form, setForm] = useState({ userId: '', start: '09:00', end: '12:00', notes: '' });
 
-  const weekDates = useMemo(() => {
-    const current = new Date(`${selectedDate}T12:00:00`);
-    const day = current.getDay() || 7;
-    current.setDate(current.getDate() - day + 1);
-    return Array.from({ length: 7 }, (_, index) => { const date = new Date(current); date.setDate(current.getDate() + index); return date; });
-  }, [selectedDate]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [{ data: usersData }, { data: shiftsData, error }] = await Promise.all([
-      supabase.from('users').select('id,name,role,avatar_url,employee_type').order('name'),
-      supabase.from('daily_shifts').select('id,user_id,shift_date,start_time,end_time,notes').eq('shift_date', selectedDate).order('start_time'),
-    ]);
-    if (error) console.error('Errore caricamento turni:', error);
-    setShifts(shiftsData || []);
-    setUsers(usersData || []);
-    setLoading(false);
-  }, [selectedDate]);
-
+  const weekDates = useMemo(() => { const current = new Date(`${selectedDate}T12:00:00`); const day = current.getDay() || 7; current.setDate(current.getDate() - day + 1); return Array.from({ length: 7 }, (_, index) => { const date = new Date(current); date.setDate(current.getDate() + index); return date; }); }, [selectedDate]);
+  const load = useCallback(async () => { setLoading(true); const [{ data: usersData }, { data: shiftsData, error }] = await Promise.all([supabase.from('users').select('id,name,role,avatar_url,employee_type').order('name'), supabase.from('daily_shifts').select('id,user_id,shift_date,start_time,end_time,notes').eq('shift_date', selectedDate).order('start_time')]); if (error) console.error('Errore caricamento turni:', error); setShifts(shiftsData || []); setUsers(usersData || []); setLoading(false); }, [selectedDate]);
   useEffect(() => { void load(); }, [load]);
-
-  useEffect(() => {
-    const channel = supabase.channel('daily-shifts-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_shifts' }, () => void load())
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [load]);
-
+  useEffect(() => { const channel = supabase.channel('daily-shifts-live').on('postgres_changes', { event: '*', schema: 'public', table: 'daily_shifts' }, () => void load()).subscribe(); return () => { void supabase.removeChannel(channel); }; }, [load]);
   const userMap = useMemo(() => new Map(users.map(item => [item.id, item])), [users]);
-  const assignedIds = useMemo(() => new Set(shifts.map(item => item.user_id)), [shifts]);
-
-  const openCreate = () => { setEditing(null); setForm({ userId: users.find(item => !assignedIds.has(item.id))?.id || users[0]?.id || '', start: '09:00', end: '18:00', notes: '' }); setEditorOpen(true); };
+  const shiftsBySlot = useMemo(() => { const map = new Map<Slot, Shift[]>(); SLOTS.forEach(slot => map.set(slot.key, [])); shifts.forEach(shift => map.get(getSlot(shift.start_time))!.push(shift)); return map; }, [shifts]);
+  const openCreate = (slot?: Slot) => { const selected = SLOTS.find(item => item.key === slot) || SLOTS[0]; setEditing(null); setForm({ userId: users[0]?.id || '', start: selected.from, end: selected.to === '23:59' ? '23:59' : selected.to, notes: '' }); setEditorOpen(true); };
   const openEdit = (shift: Shift) => { setEditing(shift); setForm({ userId: shift.user_id, start: shift.start_time.slice(0, 5), end: shift.end_time.slice(0, 5), notes: shift.notes || '' }); setEditorOpen(true); };
+  const save = async () => { if (!canManage || !form.userId || !form.start || !form.end || saving) return; if (form.end <= form.start) { window.alert('L’orario di fine deve essere successivo all’orario di inizio.'); return; } setSaving(true); try { const payload = { user_id: form.userId, shift_date: selectedDate, start_time: normalizeTime(form.start), end_time: normalizeTime(form.end), notes: form.notes.trim() || null, created_by: user?.id ?? null }; const { error } = editing ? await supabase.from('daily_shifts').update(payload).eq('id', editing.id) : await supabase.from('daily_shifts').upsert(payload, { onConflict: 'user_id,shift_date' }); if (error) { console.error('Errore salvataggio turno:', error); window.alert(`Impossibile salvare il turno.\n\n${error.message}`); return; } setEditorOpen(false); setEditing(null); await load(); } finally { setSaving(false); } };
+  const remove = async (shift: Shift) => { if (!canManage || !window.confirm('Vuoi eliminare questo turno?')) return; const { error } = await supabase.from('daily_shifts').delete().eq('id', shift.id); if (error) { console.error('Errore eliminazione turno:', error); window.alert(`Impossibile eliminare il turno.\n\n${error.message}`); return; } await load(); };
 
-  const save = async () => {
-    if (!canManage || !form.userId || !form.start || !form.end || saving) return;
-    if (form.end <= form.start) { window.alert('L’orario di fine deve essere successivo all’orario di inizio.'); return; }
-    setSaving(true);
-    try {
-      const payload = {
-        user_id: form.userId,
-        shift_date: selectedDate,
-        start_time: normalizeTime(form.start),
-        end_time: normalizeTime(form.end),
-        notes: form.notes.trim() || null,
-        created_by: user?.id ?? null,
-      };
-      const { error } = editing
-        ? await supabase.from('daily_shifts').update(payload).eq('id', editing.id)
-        : await supabase.from('daily_shifts').upsert(payload, { onConflict: 'user_id,shift_date' });
-      if (error) {
-        console.error('Errore salvataggio turno:', error);
-        window.alert(`Impossibile salvare il turno.\n\n${error.message}`);
-        return;
-      }
-      setEditorOpen(false);
-      setEditing(null);
-      await load();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (shift: Shift) => {
-    if (!canManage || !window.confirm('Vuoi eliminare questo turno?')) return;
-    const { error } = await supabase.from('daily_shifts').delete().eq('id', shift.id);
-    if (error) { console.error('Errore eliminazione turno:', error); window.alert(`Impossibile eliminare il turno.\n\n${error.message}`); return; }
-    await load();
-  };
-
-  return <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
-    <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 p-5 text-white shadow-xl sm:p-7">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><div className="mb-2 flex items-center gap-2 text-amber-300"><CalendarDays className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-[0.2em]">Organizzazione</span></div><h1 className="text-2xl font-bold sm:text-3xl">Turni giornalieri</h1><p className="mt-1 text-sm text-gray-300">Visualizza i turni impostati per tutta la squadra.</p></div>
-        {canManage && <button onClick={openCreate} disabled={!users.length || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:opacity-50"><Plus className="h-5 w-5" />Aggiungi turno</button>}
-      </div>
-    </div>
-
-    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-      <div className="flex items-center justify-between gap-2">
-        <button onClick={() => setSelectedDate(formatDate(new Date(new Date(`${selectedDate}T12:00:00`).setDate(new Date(`${selectedDate}T12:00:00`).getDate() - 1))))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50" aria-label="Giorno precedente"><ChevronLeft className="h-5 w-5" /></button>
-        <div className="min-w-0 text-center"><p className="truncate text-xs font-semibold uppercase tracking-wider text-gray-400">Turni del giorno</p><p className="truncate text-sm font-bold capitalize text-gray-900 sm:text-base">{displayDate(selectedDate)}</p></div>
-        <button onClick={() => setSelectedDate(formatDate(new Date(new Date(`${selectedDate}T12:00:00`).setDate(new Date(`${selectedDate}T12:00:00`).getDate() + 1))))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50" aria-label="Giorno successivo"><ChevronRight className="h-5 w-5" /></button>
-      </div>
-      <div className="mt-4 grid grid-cols-7 gap-1 sm:gap-2">{weekDates.map(date => { const value = formatDate(date); const active = value === selectedDate; return <button key={value} onClick={() => setSelectedDate(value)} className={`min-w-0 rounded-xl px-1 py-2 text-center transition ${active ? 'bg-amber-500 text-white shadow-md' : 'hover:bg-gray-100 text-gray-600'}`}><span className="block truncate text-[10px] font-semibold uppercase sm:text-xs">{shortDate(date).split(' ')[0]}</span><span className="mt-0.5 block text-sm font-bold sm:text-base">{date.getDate()}</span></button>; })}</div>
-    </div>
-
-    {loading ? <div className="flex h-48 items-center justify-center rounded-2xl border border-gray-200 bg-white"><div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /></div> : shifts.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shifts.map(shift => { const employee = userMap.get(shift.user_id); if (!employee) return null; return <article key={shift.id} className="group rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"><div className="flex items-center gap-3"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="md" fallbackText={employee.name} /><div className="min-w-0 flex-1"><h3 className="truncate font-bold text-gray-900">{employee.name}</h3><p className="truncate text-xs text-gray-500">{ROLE_LABELS[employee.role] || employee.role}</p></div>{canManage && <div className="flex shrink-0 gap-1"><button onClick={() => openEdit(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600" title="Modifica turno"><Edit3 className="h-4 w-4" /></button><button onClick={() => void remove(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600" title="Elimina turno"><Trash2 className="h-4 w-4" /></button></div>}</div><div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5"><Clock3 className="h-4 w-4 text-amber-500" /><span className="text-sm font-bold text-gray-800">{shift.start_time.slice(0, 5)} — {shift.end_time.slice(0, 5)}</span></div>{shift.notes && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{shift.notes}</p>}</article>; })}</div> : <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center shadow-sm"><Users className="mx-auto h-10 w-10 text-gray-300" /><h3 className="mt-3 font-bold text-gray-900">Nessun turno impostato</h3><p className="mt-1 text-sm text-gray-500">Per questa giornata non sono ancora stati programmati turni.</p>{canManage && <button onClick={openCreate} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white hover:bg-gray-800"><Plus className="h-4 w-4" />Imposta il primo turno</button>}</div>}
-
-    {editorOpen && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4"><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-gray-900">{editing ? 'Modifica turno' : 'Nuovo turno'}</h2><p className="text-xs text-gray-500 capitalize">{displayDate(selectedDate)}</p></div><button onClick={() => setEditorOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-4"><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Dipendente</span><select value={form.userId} onChange={e => setForm(v => ({ ...v, userId: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100">{users.map(item => <option key={item.id} value={item.id}>{item.name} · {ROLE_LABELS[item.role] || item.role}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Inizio</span><input type="time" value={form.start} onChange={e => setForm(v => ({ ...v, start: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-amber-500" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Fine</span><input type="time" value={form.end} onChange={e => setForm(v => ({ ...v, end: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-amber-500" /></label></div><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Nota <span className="font-normal text-gray-400">(opzionale)</span></span><textarea value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))} rows={3} maxLength={500} className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-amber-500" placeholder="Es. apertura concessionario" /></label><div className="flex gap-2 pt-1"><button onClick={() => setEditorOpen(false)} disabled={saving} className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50">Annulla</button><button onClick={() => void save()} disabled={saving} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 font-semibold text-gray-950 hover:from-yellow-400 hover:to-amber-500 disabled:cursor-wait disabled:opacity-60">{saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-950 border-t-transparent" /> : <Save className="h-4 w-4" />}{saving ? 'Salvataggio...' : 'Salva turno'}</button></div></div></div></div>}
+  return <div className="mx-auto w-full max-w-7xl space-y-5 pb-8">
+    <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 p-5 text-white shadow-xl sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-amber-300"><CalendarDays className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-[0.2em]">Programmazione</span></div><h1 className="text-2xl font-bold sm:text-3xl">Turni</h1><p className="mt-1 text-sm text-gray-300">La squadra lavora a coppie per ogni fascia della giornata.</p></div>{canManage && <button onClick={() => openCreate()} disabled={!users.length || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:opacity-50"><Plus className="h-5 w-5" />Aggiungi coppia</button>}</div></div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4"><div className="flex items-center justify-between gap-2"><button onClick={() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() - 1); setSelectedDate(formatDate(d)); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"><ChevronLeft className="h-5 w-5" /></button><div className="min-w-0 text-center"><p className="truncate text-xs font-semibold uppercase tracking-wider text-gray-400">Programmazione del giorno</p><p className="truncate text-sm font-bold capitalize text-gray-900 sm:text-base">{displayDate(selectedDate)}</p></div><button onClick={() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() + 1); setSelectedDate(formatDate(d)); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"><ChevronRight className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-7 gap-1 sm:gap-2">{weekDates.map(date => { const value = formatDate(date); const active = value === selectedDate; return <button key={value} onClick={() => setSelectedDate(value)} className={`min-w-0 rounded-xl px-1 py-2 text-center transition ${active ? 'bg-amber-500 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}><span className="block truncate text-[10px] font-semibold uppercase sm:text-xs">{shortDate(date).split(' ')[0]}</span><span className="mt-0.5 block text-sm font-bold sm:text-base">{date.getDate()}</span></button>; })}</div></div>
+    {loading ? <div className="flex h-48 items-center justify-center rounded-2xl border border-gray-200 bg-white"><div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /></div> : <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[850px] border-collapse"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="w-[230px] px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fascia</th><th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Coppia in servizio</th><th className="w-[170px] px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Orario</th><th className="w-[120px] px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Azioni</th></tr></thead><tbody>{SLOTS.map(slot => { const Icon = slot.icon; const rows = shiftsBySlot.get(slot.key) || []; return <tr key={slot.key} className="border-b border-gray-100 last:border-0"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Icon className="h-5 w-5" /></div><div><p className="font-bold text-gray-900">{slot.label}</p><p className="text-xs text-gray-500">{slot.subtitle}</p></div></div></td><td className="px-5 py-4">{rows.length ? <div className="flex items-center gap-3">{rows.slice(0, 2).map((shift, index) => { const employee = userMap.get(shift.user_id); return employee ? <React.Fragment key={shift.id}>{index > 0 && <span className="text-lg font-bold text-gray-300">+</span>}<div className="flex min-w-0 items-center gap-2"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="sm" fallbackText={employee.name} /><div className="min-w-0"><p className="max-w-[150px] truncate text-sm font-bold text-gray-900">{employee.name}</p><p className="text-[11px] text-gray-500">{ROLE_LABELS[employee.role] || employee.role}</p></div></div></React.Fragment> : null; })}</div> : <span className="text-sm text-gray-400">Nessuna coppia assegnata</span>}</td><td className="px-5 py-4"><span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700"><Clock3 className="h-3.5 w-3.5" />{rows[0] ? `${rows[0].start_time.slice(0,5)} — ${rows[0].end_time.slice(0,5)}` : slot.subtitle}</span></td><td className="px-5 py-4 text-right">{canManage && <div className="flex justify-end gap-1">{rows.map(shift => <React.Fragment key={shift.id}><button onClick={() => openEdit(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600" title="Modifica"><Edit3 className="h-4 w-4" /></button><button onClick={() => void remove(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600" title="Elimina"><Trash2 className="h-4 w-4" /></button></React.Fragment>)}</div>}</td></tr>; })}</tbody></table></div><div className="divide-y divide-gray-100 md:hidden">{SLOTS.map(slot => { const Icon = slot.icon; const rows = shiftsBySlot.get(slot.key) || []; return <section key={slot.key} className="p-4"><div className="mb-3 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Icon className="h-5 w-5" /></div><div><h3 className="font-bold text-gray-900">{slot.label}</h3><p className="text-xs text-gray-500">{slot.subtitle}</p></div></div>{rows.length ? <div className="space-y-2">{rows.slice(0, 2).map(shift => { const employee = userMap.get(shift.user_id); if (!employee) return null; return <div key={shift.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"><Avatar src={employee.avatar_url || undefined} alt={employee.name} size="md" fallbackText={employee.name} /><div className="min-w-0 flex-1"><p className="truncate font-bold text-gray-900">{employee.name}</p><p className="truncate text-xs text-gray-500">{ROLE_LABELS[employee.role] || employee.role}</p><p className="mt-1 text-xs font-semibold text-amber-700">{shift.start_time.slice(0,5)} — {shift.end_time.slice(0,5)}</p></div>{canManage && <div className="flex shrink-0 gap-1"><button onClick={() => openEdit(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-amber-100"><Edit3 className="h-4 w-4" /></button><button onClick={() => void remove(shift)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-red-100"><Trash2 className="h-4 w-4" /></button></div>}</div>; })}<div className="flex items-center justify-center gap-2 pt-1 text-xs font-semibold text-gray-400"><span className="h-px flex-1 bg-gray-200" />{rows.length >= 2 ? 'Coppia completa' : 'Manca un componente'}<span className="h-px flex-1 bg-gray-200" /></div></div> : <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">Nessuna coppia assegnata{canManage && <button onClick={() => openCreate(slot.key)} className="ml-2 font-bold text-amber-600">Aggiungi</button>}</div>}</section>; })}</div></div>}
+    {editorOpen && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4"><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-gray-900">{editing ? 'Modifica turno' : 'Aggiungi componente alla coppia'}</h2><p className="text-xs text-gray-500 capitalize">{displayDate(selectedDate)}</p></div><button onClick={() => setEditorOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-4"><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Dipendente</span><select value={form.userId} onChange={e => setForm(v => ({ ...v, userId: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100">{users.map(item => <option key={item.id} value={item.id}>{item.name} · {ROLE_LABELS[item.role] || item.role}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Inizio</span><input type="time" value={form.start} onChange={e => setForm(v => ({ ...v, start: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-amber-500" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Fine</span><input type="time" value={form.end} onChange={e => setForm(v => ({ ...v, end: e.target.value }))} className="h-11 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-amber-500" /></label></div><label className="block"><span className="mb-1.5 block text-sm font-semibold text-gray-700">Nota <span className="font-normal text-gray-400">(opzionale)</span></span><textarea value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))} rows={3} maxLength={500} className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-amber-500" placeholder="Es. apertura concessionario" /></label><div className="flex gap-2 pt-1"><button onClick={() => setEditorOpen(false)} disabled={saving} className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50">Annulla</button><button onClick={() => void save()} disabled={saving} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 font-semibold text-gray-950 hover:from-yellow-400 hover:to-amber-500 disabled:cursor-wait disabled:opacity-60">{saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-950 border-t-transparent" /> : <Save className="h-4 w-4" />}{saving ? 'Salvataggio...' : 'Salva turno'}</button></div></div></div></div>}
   </div>;
 };
