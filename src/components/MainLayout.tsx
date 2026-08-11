@@ -46,7 +46,9 @@ export const MainLayout: React.FC = () => {
     ['vice_director', 'director', 'owner'].includes(user?.role || '') ||
     (['probation', 'employee'].includes(user?.role || '') && user?.employeeType === 'dealer')
   );
-  const hasAnnouncementsAccess = isOnService && ['owner', 'director', 'vice_director'].includes(user?.role || '');
+  // La lettura degli annunci è disponibile a qualsiasi ruolo purché sia in servizio.
+  // Le azioni Modifica/Elimina/Visualizzazioni restano protette dai ruoli alti nella pagina.
+  const hasAnnouncementsAccess = isOnService;
 
   return (
     <div className="app-viewport-height flex bg-gray-50">
