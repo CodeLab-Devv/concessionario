@@ -14,7 +14,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage,
   const { user } = useAuth();
   const isOnService = useServiceStatus(user);
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
-  const canAccessAnnouncements = isOnService && ['owner', 'director', 'vice_director'].includes(user?.role || '');
+
+  // Tutti gli utenti che sono effettivamente in servizio possono leggere gli annunci.
+  // I ruoli alti vengono controllati separatamente dentro AnnouncementsPage per le azioni di gestione.
+  const canAccessAnnouncements = isOnService;
 
   const menuItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard, page: 'dashboard' as const },
