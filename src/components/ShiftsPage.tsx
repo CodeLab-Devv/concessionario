@@ -1,3 +1,4 @@
+```tsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -16,6 +17,7 @@ import {
   UserRoundX,
   X,
 } from 'lucide-react';
+
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from './ui/NotificationManager';
@@ -60,16 +62,23 @@ interface SiteNotification {
   created_at: string;
 }
 
-type Slot =
-  | 'mattino'
-  | 'pomeriggio'
-  | 'sera'
-  | 'tarda_notte'
-  | 'tutto_giorno';
+type ShiftSlot = 'mattino' | 'pomeriggio' | 'sera' | 'tarda_notte';
+type Slot = ShiftSlot | 'tutto_giorno';
 
-type ShiftSlot = Exclude<Slot, 'tutto_giorno'>;
+interface SlotConfig {
+  key: Slot;
+  label: string;
+  subtitle: string;
+  icon: React.ElementType;
+  from: string;
+  to: string;
+}
 
-const HIGH_ROLES = ['owner', 'director', 'vice_director'];
+const HIGH_ROLES = new Set([
+  'owner',
+  'director',
+  'vice_director',
+]);
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Proprietario',
@@ -79,14 +88,7 @@ const ROLE_LABELS: Record<string, string> = {
   probation: 'In Prova',
 };
 
-const SLOTS: {
-  key: Slot;
-  label: string;
-  subtitle: string;
-  icon: React.ElementType;
-  from: string;
-  to: string;
-}[] = [
+const SLOTS: SlotConfig[] = [
   {
     key: 'mattino',
     label: 'Mattino',
@@ -129,7 +131,13 @@ const SLOTS: {
   },
 ];
 
-const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+const SHIFT_SLOTS = SLOTS.filter(
+  (slot): slot is SlotConfig & { key: ShiftSlot } =>
+    slot.key !== 'tutto_giorno',
+);
+
+const formatDate = (date: Date) =>
+  date.toISOString().slice(0, 10);
 
 const displayDate = (value: string) =>
   new Intl.DateTimeFormat('it-IT', {
@@ -147,33 +155,52 @@ const shortDate = (date: Date) =>
 const normalizeTime = (value: string) =>
   value.length === 5 ? `${value}:00` : value;
 
-const getSlot = (start: string): ShiftSlot => {
-  const hour = Number(start.slice(0, 2));
+const getSlotFromTime = (startTime: string): ShiftSlot => {
+  const hour = Number(startTime.slice(0, 2));
 
-  if (hour >= 6 && hour < 12) return 'mattino';
-  if (hour >= 12 && hour < 18) return 'pomeriggio';
-  if (hour >= 18) return 'sera';
+  if (hour >= 6 && hour < 12) {
+    return 'mattino';
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return 'pomeriggio';
+  }
+
+  if (hour >= 18) {
+    return 'sera';
+  }
 
   return 'tarda_notte';
 };
 
-const slotInfo = (key: Slot) => SLOTS.find((slot) => slot.key === key)!;
+const getSlotInfo = (slot: Slot) =>
+  SLOTS.find((item) => item.key === slot) ?? SLOTS[0];
+
+const getRoleLabel = (role: string) =>
+  ROLE_LABELS[role] ?? role;
+
+const sortByStartTime = <T extends { start_time: string }>(
+  rows: T[],
+) =>
+  [...rows].sort((a, b) =>
+    a.start_time.localeCompare(b.start_time),
+  );
+
+const getUniqueRows = <T extends { id: string }>(rows: T[]) =>
+  rows.filter(
+    (row, index, array) =>
+      array.findIndex((item) => item.id === row.id) === index,
+  );
 
 export const ShiftsPage: React.FC = () => {
   const { user } = useAuth();
-  const { showSuccess, showError, showWarning } = useNotifications();
+  const {
+    showSuccess,
+    showError,
+    showWarning,
+  } = useNotifications();
 
-  /**
-   * Solo questi ruoli possono gestire i turni.
-   *
-   * IMPORTANTE:
-   * questo controllo viene utilizzato anche per non renderizzare
-   * proprio il pulsante "Aggiungi turno" agli utenti normali.
-   */
-  const canManage = useMemo(
-    () => HIGH_ROLES.includes(user?.role || ''),
-    [user?.role],
-  );
+  const canManage = HIGH_ROLES.has(user?.role ?? '');
 
   const [selectedDate, setSelectedDate] = useState(() =>
     formatDate(new Date()),
@@ -186,32 +213,28 @@ export const ShiftsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [editor, setEditor] = useState<'shift' | 'absence' | null>(null);
+  const [editor, setEditor] = useState<
+    'shift' | 'absence' | null
+  >(null);
 
-  const [editingIds, setEditingIds] = useState<string[]>([]);
-  const [editingAbsenceId, setEditingAbsenceId] = useState<string | null>(
-    null,
+  const [editingShiftIds, setEditingShiftIds] = useState<string[]>(
+    [],
   );
 
-  const [form, setForm] = useState<{
-    slot: ShiftSlot;
-    userIds: [string, string];
-    start: string;
-    end: string;
-    notes: string;
-  }>({
-    slot: 'mattino',
+  const [editingAbsenceId, setEditingAbsenceId] = useState<
+    string | null
+  >(null);
+
+  const [shiftForm, setShiftForm] = useState({
+    slot: 'mattino' as ShiftSlot,
     userIds: ['', ''],
     start: '06:00',
     end: '12:00',
     notes: '',
   });
 
-  const [absenceForm, setAbsenceForm] = useState<{
-    slot: Slot;
-    note: string;
-  }>({
-    slot: 'mattino',
+  const [absenceForm, setAbsenceForm] = useState({
+    slot: 'mattino' as Slot,
     note: '',
   });
 
@@ -224,7 +247,6 @@ export const ShiftsPage: React.FC = () => {
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(current);
       date.setDate(current.getDate() + index);
-
       return date;
     });
   }, [selectedDate]);
@@ -234,66 +256,85 @@ export const ShiftsPage: React.FC = () => {
     [users],
   );
 
-  const load = useCallback(async () => {
+  /**
+   * Caricamento dati del giorno.
+   */
+  const loadData = useCallback(async () => {
     setLoading(true);
 
-    const [
-      { data: usersData, error: usersError },
-      { data: shiftsData, error: shiftsError },
-      { data: absencesData, error: absencesError },
-    ] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id,name,role,avatar_url,employee_type')
-        .order('name'),
+    try {
+      const [
+        usersResult,
+        shiftsResult,
+        absencesResult,
+      ] = await Promise.all([
+        supabase
+          .from('users')
+          .select(
+            'id,name,role,avatar_url,employee_type',
+          )
+          .order('name'),
 
-      supabase
-        .from('daily_shifts')
-        .select(
-          'id,user_id,shift_date,start_time,end_time,notes',
-        )
-        .eq('shift_date', selectedDate)
-        .order('start_time'),
+        supabase
+          .from('daily_shifts')
+          .select(
+            'id,user_id,shift_date,start_time,end_time,notes',
+          )
+          .eq('shift_date', selectedDate)
+          .order('start_time'),
 
-      supabase
-        .from('shift_absences')
-        .select(
-          'id,user_id,absence_date,slot,start_time,end_time,note,created_by',
-        )
-        .eq('absence_date', selectedDate)
-        .order('start_time'),
-    ]);
+        supabase
+          .from('shift_absences')
+          .select(
+            'id,user_id,absence_date,slot,start_time,end_time,note,created_by',
+          )
+          .eq('absence_date', selectedDate)
+          .order('start_time'),
+      ]);
 
-    if (usersError) {
-      console.error(
-        'Errore caricamento dipendenti:',
-        usersError,
+      if (usersResult.error) {
+        console.error(
+          'Errore caricamento utenti:',
+          usersResult.error,
+        );
+      }
+
+      if (shiftsResult.error) {
+        console.error(
+          'Errore caricamento turni:',
+          shiftsResult.error,
+        );
+      }
+
+      if (absencesResult.error) {
+        console.error(
+          'Errore caricamento assenze:',
+          absencesResult.error,
+        );
+      }
+
+      setUsers(usersResult.data ?? []);
+      setShifts(
+        sortByStartTime(shiftsResult.data ?? []),
       );
-    }
-
-    if (shiftsError) {
-      console.error(
-        'Errore caricamento turni:',
-        shiftsError,
+      setAbsences(
+        sortByStartTime(absencesResult.data ?? []),
       );
-    }
+    } catch (error) {
+      console.error('Errore caricamento turni:', error);
 
-    if (absencesError) {
-      console.error(
-        'Errore caricamento assenze:',
-        absencesError,
+      showError(
+        'Errore caricamento',
+        'Non è stato possibile caricare la programmazione.',
       );
+    } finally {
+      setLoading(false);
     }
-
-    setUsers(usersData || []);
-    setShifts(shiftsData || []);
-    setAbsences(absencesData || []);
-    setLoading(false);
-  }, [selectedDate]);
+  }, [selectedDate, showError]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadData();
+  }, [loadData]);
 
   /**
    * Realtime turni + assenze.
@@ -302,8 +343,7 @@ export const ShiftsPage: React.FC = () => {
     let active = true;
 
     const channel = supabase
-      .channel(`shifts-realtime-${selectedDate}`)
-
+      .channel(`shifts-${selectedDate}`)
       .on(
         'postgres_changes',
         {
@@ -320,48 +360,48 @@ export const ShiftsPage: React.FC = () => {
             if (row.shift_date !== selectedDate) return;
 
             setShifts((current) =>
-              current.some((item) => item.id === row.id)
-                ? current
-                : [...current, row].sort((a, b) =>
-                    a.start_time.localeCompare(b.start_time),
-                  ),
+              sortByStartTime(
+                getUniqueRows([...current, row]),
+              ),
             );
+
+            return;
           }
 
           if (payload.eventType === 'UPDATE') {
             const row = payload.new as Shift;
 
             setShifts((current) => {
-              if (row.shift_date === selectedDate) {
-                return current.some((item) => item.id === row.id)
-                  ? current
-                      .map((item) =>
-                        item.id === row.id ? row : item,
-                      )
-                      .sort((a, b) =>
-                        a.start_time.localeCompare(b.start_time),
-                      )
-                  : [...current, row].sort((a, b) =>
-                      a.start_time.localeCompare(b.start_time),
-                    );
-              }
-
-              return current.filter(
+              const filtered = current.filter(
                 (item) => item.id !== row.id,
               );
+
+              if (row.shift_date !== selectedDate) {
+                return filtered;
+              }
+
+              return sortByStartTime([
+                ...filtered,
+                row,
+              ]);
             });
+
+            return;
           }
 
           if (payload.eventType === 'DELETE') {
             const row = payload.old as Partial<Shift>;
 
+            if (!row.id) return;
+
             setShifts((current) =>
-              current.filter((item) => item.id !== row.id),
+              current.filter(
+                (item) => item.id !== row.id,
+              ),
             );
           }
         },
       )
-
       .on(
         'postgres_changes',
         {
@@ -378,43 +418,44 @@ export const ShiftsPage: React.FC = () => {
             if (row.absence_date !== selectedDate) return;
 
             setAbsences((current) =>
-              current.some((item) => item.id === row.id)
-                ? current
-                : [...current, row].sort((a, b) =>
-                    a.start_time.localeCompare(b.start_time),
-                  ),
+              sortByStartTime(
+                getUniqueRows([...current, row]),
+              ),
             );
+
+            return;
           }
 
           if (payload.eventType === 'UPDATE') {
             const row = payload.new as Absence;
 
             setAbsences((current) => {
-              if (row.absence_date === selectedDate) {
-                return current.some((item) => item.id === row.id)
-                  ? current
-                      .map((item) =>
-                        item.id === row.id ? row : item,
-                      )
-                      .sort((a, b) =>
-                        a.start_time.localeCompare(b.start_time),
-                      )
-                  : [...current, row].sort((a, b) =>
-                      a.start_time.localeCompare(b.start_time),
-                    );
-              }
-
-              return current.filter(
+              const filtered = current.filter(
                 (item) => item.id !== row.id,
               );
+
+              if (row.absence_date !== selectedDate) {
+                return filtered;
+              }
+
+              return sortByStartTime([
+                ...filtered,
+                row,
+              ]);
             });
+
+            return;
           }
 
           if (payload.eventType === 'DELETE') {
             const row = payload.old as Partial<Absence>;
 
+            if (!row.id) return;
+
             setAbsences((current) =>
-              current.filter((item) => item.id !== row.id),
+              current.filter(
+                (item) => item.id !== row.id,
+              ),
             );
           }
         },
@@ -441,12 +482,14 @@ export const ShiftsPage: React.FC = () => {
    * Notifiche realtime per i gradi alti.
    */
   useEffect(() => {
-    if (!user?.id || !canManage) return;
+    if (!user?.id || !canManage) {
+      return;
+    }
 
     let active = true;
 
     const loadNotifications = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('notifications')
         .select(
           'id,recipient_id,type,title,message,data,read_at,created_at',
@@ -458,9 +501,22 @@ export const ShiftsPage: React.FC = () => {
         })
         .limit(20);
 
-      if (!active || !data?.length) return;
+      if (error) {
+        console.error(
+          'Errore caricamento notifiche:',
+          error,
+        );
+        return;
+      }
 
-      data.forEach((item: SiteNotification) => {
+      if (!active || !data?.length) {
+        return;
+      }
+
+      data.forEach((notification) => {
+        const item =
+          notification as SiteNotification;
+
         showWarning(
           item.title,
           item.message || undefined,
@@ -469,7 +525,7 @@ export const ShiftsPage: React.FC = () => {
 
       const ids = data.map((item) => item.id);
 
-      void supabase
+      await supabase
         .from('notifications')
         .update({
           read_at: new Date().toISOString(),
@@ -481,7 +537,7 @@ export const ShiftsPage: React.FC = () => {
     void loadNotifications();
 
     const channel = supabase
-      .channel(`notifications-realtime-${user.id}`)
+      .channel(`notifications-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -515,53 +571,55 @@ export const ShiftsPage: React.FC = () => {
             .eq('recipient_id', user.id);
         },
       )
-      .subscribe((status) => {
-        if (
-          status === 'CHANNEL_ERROR' ||
-          status === 'TIMED_OUT'
-        ) {
-          console.warn(
-            'Realtime notifiche non disponibile:',
-            status,
-          );
-        }
-      });
+      .subscribe();
 
     return () => {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, [canManage, showWarning, user?.id]);
+  }, [
+    canManage,
+    showWarning,
+    user?.id,
+  ]);
 
+  /**
+   * Turni raggruppati per fascia.
+   */
   const shiftsBySlot = useMemo(() => {
     const map = new Map<ShiftSlot, Shift[]>();
 
-    SLOTS.filter(
-      (slot) => slot.key !== 'tutto_giorno',
-    ).forEach((slot) => {
-      map.set(slot.key as ShiftSlot, []);
+    SHIFT_SLOTS.forEach((slot) => {
+      map.set(slot.key, []);
     });
 
     shifts.forEach((shift) => {
-      const slot = getSlot(shift.start_time);
+      const slot = getSlotFromTime(
+        shift.start_time,
+      );
+
       map.get(slot)?.push(shift);
     });
 
     return map;
   }, [shifts]);
 
+  /**
+   * Assenze raggruppate per fascia.
+   *
+   * Tutto il giorno viene applicato a tutte
+   * le quattro fasce.
+   */
   const absencesBySlot = useMemo(() => {
-    const map = new Map<Slot, Absence[]>();
+    const map = new Map<ShiftSlot, Absence[]>();
 
-    SLOTS.forEach((slot) => {
+    SHIFT_SLOTS.forEach((slot) => {
       map.set(slot.key, []);
     });
 
     absences.forEach((absence) => {
       if (absence.slot === 'tutto_giorno') {
-        SLOTS.filter(
-          (slot) => slot.key !== 'tutto_giorno',
-        ).forEach((slot) => {
+        SHIFT_SLOTS.forEach((slot) => {
           map.get(slot.key)?.push(absence);
         });
 
@@ -574,112 +632,180 @@ export const ShiftsPage: React.FC = () => {
     return map;
   }, [absences]);
 
-  const openCreateShift = (
-    slotKey: ShiftSlot = 'mattino',
-  ) => {
-    /**
-     * Protezione ulteriore.
-     * Anche se qualcuno prova a richiamare la funzione
-     * manualmente, un utente normale non può aprire l'editor.
-     */
-    if (!canManage) return;
+  /**
+   * Restituisce gli utenti disponibili per una fascia.
+   *
+   * IMPORTANTE:
+   * - assenza della stessa fascia => escluso
+   * - tutto il giorno => escluso
+   * - durante una modifica gli utenti già assegnati
+   *   al turno rimangono disponibili
+   */
+  const getAvailableUsers = useCallback(
+    (slot: ShiftSlot) => {
+      const unavailableIds = new Set(
+        (absencesBySlot.get(slot) ?? []).map(
+          (absence) => absence.user_id,
+        ),
+      );
 
-    const slot = slotInfo(slotKey);
+      return users.filter((employee) => {
+        if (
+          editingShiftIds.includes(employee.id)
+        ) {
+          return true;
+        }
 
-    setEditingIds([]);
+        return !unavailableIds.has(employee.id);
+      });
+    },
+    [absencesBySlot, editingShiftIds, users],
+  );
 
-    setForm({
-      slot: slotKey,
-      userIds: [
-        users[0]?.id || '',
-        users[1]?.id || '',
-      ],
-      start: slot.from,
-      end: slot.to,
-      notes: '',
-    });
+  /**
+   * Controllo centrale dell'assenza.
+   */
+  const isUserAbsentForSlot = useCallback(
+    (userId: string, slot: ShiftSlot) =>
+      (absencesBySlot.get(slot) ?? []).some(
+        (absence) => absence.user_id === userId,
+      ),
+    [absencesBySlot],
+  );
 
-    setEditor('shift');
-  };
+  /**
+   * Apre creazione turno.
+   */
+  const openCreateShift = useCallback(
+    (slotKey: ShiftSlot = 'mattino') => {
+      if (!canManage) {
+        showWarning(
+          'Permesso negato',
+          'Non hai il grado necessario per gestire i turni.',
+        );
+        return;
+      }
 
-  const openEditShift = (rows: Shift[]) => {
-    if (!canManage || !rows.length) return;
+      const slot = getSlotInfo(slotKey);
+      const availableUsers =
+        getAvailableUsers(slotKey);
 
-    const pair = rows.slice(0, 2);
+      setEditingShiftIds([]);
 
-    const slotKey = getSlot(
-      pair[0]?.start_time || '06:00',
-    );
+      setShiftForm({
+        slot: slotKey,
+        userIds: [
+          availableUsers[0]?.id ?? '',
+          availableUsers[1]?.id ?? '',
+        ],
+        start: slot.from,
+        end: slot.to,
+        notes: '',
+      });
 
-    const slot = slotInfo(slotKey);
+      setEditor('shift');
+    },
+    [
+      canManage,
+      getAvailableUsers,
+      showWarning,
+    ],
+  );
 
-    setEditingIds(
-      pair.map((row) => row.id),
-    );
+  /**
+   * Apre modifica della coppia.
+   */
+  const openEditShift = useCallback(
+    (rows: Shift[]) => {
+      if (!canManage || rows.length === 0) {
+        return;
+      }
 
-    setForm({
-      slot: slotKey,
-      userIds: [
-        pair[0]?.user_id || '',
-        pair[1]?.user_id || '',
-      ],
-      start:
-        pair[0]?.start_time.slice(0, 5) ||
-        slot.from,
-      end:
-        pair[0]?.end_time.slice(0, 5) ||
-        slot.to,
-      notes:
-        pair[0]?.notes ||
-        pair[1]?.notes ||
-        '',
-    });
+      const pair = rows.slice(0, 2);
+      const slotKey = getSlotFromTime(
+        pair[0]?.start_time ?? '06:00',
+      );
+      const slot = getSlotInfo(slotKey);
 
-    setEditor('shift');
-  };
+      setEditingShiftIds(
+        pair.map((row) => row.id),
+      );
 
-  const openCreateAbsence = (
-    slot: Slot = 'mattino',
-  ) => {
-    if (!user?.id) return;
+      setShiftForm({
+        slot: slotKey,
+        userIds: [
+          pair[0]?.user_id ?? '',
+          pair[1]?.user_id ?? '',
+        ],
+        start:
+          pair[0]?.start_time.slice(0, 5) ??
+          slot.from,
+        end:
+          pair[0]?.end_time.slice(0, 5) ??
+          slot.to,
+        notes:
+          pair[0]?.notes ??
+          pair[1]?.notes ??
+          '',
+      });
 
-    setEditingAbsenceId(null);
+      setEditor('shift');
+    },
+    [canManage],
+  );
 
-    setAbsenceForm({
-      slot,
-      note: '',
-    });
+  /**
+   * Apre creazione assenza personale.
+   */
+  const openCreateAbsence = useCallback(
+    (slot: Slot = 'mattino') => {
+      if (!user?.id) return;
 
-    setEditor('absence');
-  };
+      setEditingAbsenceId(null);
+      setAbsenceForm({
+        slot,
+        note: '',
+      });
 
-  const openEditAbsence = (
-    absence: Absence,
-  ) => {
-    if (
-      !user?.id ||
-      absence.user_id !== user.id
-    ) {
+      setEditor('absence');
+    },
+    [user?.id],
+  );
+
+  /**
+   * Apre modifica assenza personale.
+   */
+  const openEditAbsence = useCallback(
+    (absence: Absence) => {
+      if (
+        !user?.id ||
+        absence.user_id !== user.id
+      ) {
+        return;
+      }
+
+      setEditingAbsenceId(absence.id);
+
+      setAbsenceForm({
+        slot: absence.slot,
+        note: absence.note ?? '',
+      });
+
+      setEditor('absence');
+    },
+    [user?.id],
+  );
+
+  /**
+   * Salvataggio turno.
+   */
+  const saveShift = async () => {
+    if (!canManage || saving) {
       return;
     }
 
-    setEditingAbsenceId(absence.id);
-
-    setAbsenceForm({
-      slot: absence.slot,
-      note: absence.note || '',
-    });
-
-    setEditor('absence');
-  };
-
-  const saveShift = async () => {
-    if (!canManage || saving) return;
-
-    const [
-      firstUser,
-      secondUser,
-    ] = form.userIds;
+    const [firstUser, secondUser] =
+      shiftForm.userIds;
 
     if (
       !firstUser ||
@@ -690,106 +816,135 @@ export const ShiftsPage: React.FC = () => {
         'Coppia non valida',
         'Seleziona due persone diverse.',
       );
+      return;
+    }
 
+    /**
+     * Non permettere di inserire una persona
+     * assente nella fascia selezionata.
+     *
+     * Le persone già presenti nel turno in modifica
+     * vengono escluse dal controllo perché rappresentano
+     * la stessa assegnazione che stiamo modificando.
+     */
+    const selectedUsers = [
+      firstUser,
+      secondUser,
+    ];
+
+    const absentUser = selectedUsers.find(
+      (userId) =>
+        isUserAbsentForSlot(
+          userId,
+          shiftForm.slot,
+        ) &&
+        !shifts
+          .filter((shift) =>
+            editingShiftIds.includes(shift.id),
+          )
+          .some(
+            (shift) => shift.user_id === userId,
+          ),
+    );
+
+    if (absentUser) {
+      const employee =
+        userMap.get(absentUser);
+
+      showError(
+        'Persona assente',
+        `${employee?.name ?? 'La persona selezionata'} ha un'assenza registrata per questa fascia.`,
+      );
+
+      return;
+    }
+
+    /**
+     * Evita che una persona venga assegnata
+     * due volte alla stessa fascia.
+     */
+    const duplicate = shifts.some((shift) => {
+      if (editingShiftIds.includes(shift.id)) {
+        return false;
+      }
+
+      return (
+        selectedUsers.includes(shift.user_id) &&
+        getSlotFromTime(shift.start_time) ===
+          shiftForm.slot
+      );
+    });
+
+    if (duplicate) {
+      showWarning(
+        'Turno già presente',
+        'Una delle persone selezionate è già assegnata a questa fascia.',
+      );
       return;
     }
 
     setSaving(true);
 
     try {
-      const duplicate = shifts.some(
-        (shift) =>
-          !editingIds.includes(shift.id) &&
-          form.userIds.includes(shift.user_id) &&
-          getSlot(shift.start_time) ===
-            form.slot,
-      );
-
-      if (duplicate) {
-        showWarning(
-          'Turno già presente',
-          'Una delle persone è già assegnata a questa fascia.',
-        );
-
-        return;
-      }
-
-      if (editingIds.length) {
+      /**
+       * In modifica cancelliamo prima la vecchia coppia.
+       */
+      if (editingShiftIds.length > 0) {
         const { error } = await supabase
           .from('daily_shifts')
           .delete()
-          .in('id', editingIds);
+          .in('id', editingShiftIds);
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
       }
 
-      const payload = form.userIds.map(
+      const payload = selectedUsers.map(
         (userId) => ({
           user_id: userId,
           shift_date: selectedDate,
           start_time: normalizeTime(
-            form.start,
+            shiftForm.start,
           ),
           end_time: normalizeTime(
-            form.end,
+            shiftForm.end,
           ),
           notes:
-            form.notes.trim() || null,
+            shiftForm.notes.trim() || null,
           created_by: user?.id ?? null,
         }),
       );
 
-      const {
-        data,
-        error,
-      } = await supabase
+      const { data, error } = await supabase
         .from('daily_shifts')
         .insert(payload)
         .select(
           'id,user_id,shift_date,start_time,end_time,notes',
         );
 
-      if (error) throw error;
-
-      if (editingIds.length) {
-        setShifts((current) =>
-          current
-            .filter(
-              (item) =>
-                !editingIds.includes(item.id),
-            )
-            .concat((data || []) as Shift[])
-            .sort((a, b) =>
-              a.start_time.localeCompare(
-                b.start_time,
-              ),
-            ),
-        );
-      } else if (data?.length) {
-        setShifts((current) =>
-          [
-            ...current,
-            ...(data as Shift[]),
-          ]
-            .filter(
-              (item, index, array) =>
-                array.findIndex(
-                  (row) =>
-                    row.id === item.id,
-                ) === index,
-            )
-            .sort((a, b) =>
-              a.start_time.localeCompare(
-                b.start_time,
-              ),
-            ),
-        );
+      if (error) {
+        throw error;
       }
+
+      const inserted = (data ?? []) as Shift[];
+
+      setShifts((current) => {
+        const filtered = current.filter(
+          (item) =>
+            !editingShiftIds.includes(item.id),
+        );
+
+        return sortByStartTime([
+          ...filtered,
+          ...inserted,
+        ]);
+      });
 
       setEditor(null);
 
       showSuccess(
-        editingIds.length
+        editingShiftIds.length
           ? 'Turno aggiornato'
           : 'Turno aggiunto',
       );
@@ -810,13 +965,18 @@ export const ShiftsPage: React.FC = () => {
     }
   };
 
+  /**
+   * Salvataggio assenza.
+   */
   const saveAbsence = async () => {
-    if (!user?.id || saving) return;
+    if (!user?.id || saving) {
+      return;
+    }
 
     setSaving(true);
 
     try {
-      const info = slotInfo(
+      const slot = getSlotInfo(
         absenceForm.slot,
       );
 
@@ -824,22 +984,15 @@ export const ShiftsPage: React.FC = () => {
         user_id: user.id,
         absence_date: selectedDate,
         slot: absenceForm.slot,
-        start_time: normalizeTime(
-          info.from,
-        ),
-        end_time: normalizeTime(
-          info.to,
-        ),
+        start_time: normalizeTime(slot.from),
+        end_time: normalizeTime(slot.to),
         note:
           absenceForm.note.trim() || null,
         created_by: user.id,
       };
 
       if (editingAbsenceId) {
-        const {
-          data,
-          error,
-        } = await supabase
+        const { data, error } = await supabase
           .from('shift_absences')
           .update(payload)
           .eq('id', editingAbsenceId)
@@ -849,20 +1002,21 @@ export const ShiftsPage: React.FC = () => {
           )
           .single();
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
         setAbsences((current) =>
-          current.map((item) =>
-            item.id === data.id
-              ? (data as Absence)
-              : item,
+          sortByStartTime(
+            current.map((item) =>
+              item.id === data.id
+                ? (data as Absence)
+                : item,
+            ),
           ),
         );
       } else {
-        const {
-          data,
-          error,
-        } = await supabase
+        const { data, error } = await supabase
           .from('shift_absences')
           .insert(payload)
           .select(
@@ -870,21 +1024,17 @@ export const ShiftsPage: React.FC = () => {
           )
           .single();
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
         setAbsences((current) =>
-          current.some(
-            (item) => item.id === data.id,
-          )
-            ? current
-            : [
-                ...current,
-                data as Absence,
-              ].sort((a, b) =>
-                a.start_time.localeCompare(
-                  b.start_time,
-                ),
-              ),
+          sortByStartTime(
+            getUniqueRows([
+              ...current,
+              data as Absence,
+            ]),
+          ),
         );
       }
 
@@ -913,6 +1063,9 @@ export const ShiftsPage: React.FC = () => {
     }
   };
 
+  /**
+   * Eliminazione assenza personale.
+   */
   const removeAbsence = async (
     absence: Absence,
   ) => {
@@ -937,7 +1090,6 @@ export const ShiftsPage: React.FC = () => {
         'Impossibile eliminare',
         error.message,
       );
-
       return;
     }
 
@@ -950,12 +1102,15 @@ export const ShiftsPage: React.FC = () => {
     showSuccess('Assenza eliminata');
   };
 
+  /**
+   * Eliminazione coppia.
+   */
   const removePair = async (
     rows: Shift[],
   ) => {
     if (
       !canManage ||
-      !rows.length ||
+      rows.length === 0 ||
       !window.confirm(
         'Vuoi eliminare l’intera coppia da questo turno?',
       )
@@ -977,7 +1132,6 @@ export const ShiftsPage: React.FC = () => {
         'Impossibile eliminare il turno',
         error.message,
       );
-
       return;
     }
 
@@ -990,16 +1144,20 @@ export const ShiftsPage: React.FC = () => {
     showSuccess('Turno eliminato');
   };
 
+  /**
+   * Persone della coppia.
+   */
   const renderPeople = (
     rows: Shift[],
   ) =>
     rows.slice(0, 2).map(
       (shift, index) => {
-        const employee = userMap.get(
-          shift.user_id,
-        );
+        const employee =
+          userMap.get(shift.user_id);
 
-        if (!employee) return null;
+        if (!employee) {
+          return null;
+        }
 
         return (
           <React.Fragment key={shift.id}>
@@ -1012,7 +1170,7 @@ export const ShiftsPage: React.FC = () => {
             <div className="flex min-w-0 items-center gap-2">
               <Avatar
                 src={
-                  employee.avatar_url ||
+                  employee.avatar_url ??
                   undefined
                 }
                 alt={employee.name}
@@ -1026,9 +1184,7 @@ export const ShiftsPage: React.FC = () => {
                 </p>
 
                 <p className="text-[11px] text-gray-500">
-                  {ROLE_LABELS[
-                    employee.role
-                  ] || employee.role}
+                  {getRoleLabel(employee.role)}
                 </p>
               </div>
             </div>
@@ -1037,78 +1193,75 @@ export const ShiftsPage: React.FC = () => {
       },
     );
 
-  const renderAbsences = (
-    slot: ShiftSlot,
-  ) =>
-    (absencesBySlot.get(slot) || []).map(
-      (absence) => {
-        const employee = userMap.get(
-          absence.user_id,
-        );
-
-        if (!employee) return null;
-
-        const own =
-          absence.user_id === user?.id;
-
-        return (
-          <div
-            key={`${slot}-${absence.id}`}
-            className="mt-2 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-2.5"
-          >
-            <Avatar
-              src={
-                employee.avatar_url ||
-                undefined
-              }
-              alt={employee.name}
-              size="sm"
-              fallbackText={employee.name}
-            />
-
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-red-900">
-                {employee.name} · ASSENTE
-              </p>
-
-              <p className="text-[11px] text-red-700">
-                {absence.slot ===
-                'tutto_giorno'
-                  ? 'Tutto il giorno'
-                  : absence.note ||
-                    'Assenza registrata'}
-              </p>
-            </div>
-
-            {own && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() =>
-                    openEditAbsence(
-                      absence,
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"
-                >
-                  <Edit3 className="h-3.5 w-3.5 text-red-700" />
-                </button>
-
-                <button
-                  onClick={() =>
-                    void removeAbsence(
-                      absence,
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-red-700" />
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      },
+  /**
+   * Navigazione data.
+   */
+  const changeDate = (days: number) => {
+    const date = new Date(
+      `${selectedDate}T12:00:00`,
     );
+
+    date.setDate(date.getDate() + days);
+
+    setSelectedDate(formatDate(date));
+  };
+
+  /**
+   * Cambio fascia nel modal.
+   */
+  const handleSlotChange = (
+    slotKey: ShiftSlot,
+  ) => {
+    const slot = getSlotInfo(slotKey);
+
+    const availableUsers =
+      getAvailableUsers(slotKey);
+
+    setShiftForm((current) => {
+      const currentUsers =
+        current.userIds.filter(
+          (id) =>
+            id &&
+            (
+              availableUsers.some(
+                (employee) =>
+                  employee.id === id,
+              ) ||
+              current.userIds.includes(id),
+            ),
+        );
+
+      return {
+        ...current,
+        slot: slotKey,
+        start: slot.from,
+        end: slot.to,
+        userIds: [
+          currentUsers[0] ??
+            availableUsers[0]?.id ??
+            '',
+          currentUsers[1] ??
+            availableUsers[1]?.id ??
+            '',
+        ],
+      };
+    });
+  };
+
+  /**
+   * Utenti disponibili per la selezione corrente.
+   */
+  const availableShiftUsers = useMemo(
+    () =>
+      getAvailableUsers(
+        shiftForm.slot,
+      ),
+    [getAvailableUsers, shiftForm.slot],
+  );
+
+  const hasEnoughUsers =
+    availableShiftUsers.length >= 2 ||
+    editingShiftIds.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 pb-8">
@@ -1135,25 +1288,21 @@ export const ShiftsPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            {/* ASSENZA: DISPONIBILE A TUTTI GLI UTENTI AUTENTICATI */}
             <button
+              type="button"
               onClick={() =>
                 openCreateAbsence()
               }
               disabled={!user?.id || saving}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-500/15 px-4 font-semibold text-red-100 transition hover:bg-red-500/25 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-500/15 px-4 font-semibold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserRoundX className="h-5 w-5" />
               Comunica assenza
             </button>
 
-            {/* 
-              AGGIUNGI TURNO:
-              NON VIENE PROPRIO RENDERIZZATO
-              agli utenti senza permesso.
-            */}
             {canManage && (
               <button
+                type="button"
                 onClick={() =>
                   openCreateShift()
                 }
@@ -1175,19 +1324,10 @@ export const ShiftsPage: React.FC = () => {
       <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <button
-            onClick={() => {
-              const date = new Date(
-                `${selectedDate}T12:00:00`,
-              );
-
-              date.setDate(
-                date.getDate() - 1,
-              );
-
-              setSelectedDate(
-                formatDate(date),
-              );
-            }}
+            type="button"
+            onClick={() =>
+              changeDate(-1)
+            }
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -1199,26 +1339,15 @@ export const ShiftsPage: React.FC = () => {
             </p>
 
             <p className="truncate text-sm font-bold capitalize text-gray-900 sm:text-base">
-              {displayDate(
-                selectedDate,
-              )}
+              {displayDate(selectedDate)}
             </p>
           </div>
 
           <button
-            onClick={() => {
-              const date = new Date(
-                `${selectedDate}T12:00:00`,
-              );
-
-              date.setDate(
-                date.getDate() + 1,
-              );
-
-              setSelectedDate(
-                formatDate(date),
-              );
-            }}
+            type="button"
+            onClick={() =>
+              changeDate(1)
+            }
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50"
           >
             <ChevronRight className="h-5 w-5" />
@@ -1227,14 +1356,16 @@ export const ShiftsPage: React.FC = () => {
 
         <div className="mt-4 grid grid-cols-7 gap-1 sm:gap-2">
           {weekDates.map((date) => {
-            const value =
-              formatDate(date);
-
+            const value = formatDate(date);
             const active =
               value === selectedDate;
 
+            const weekday =
+              shortDate(date).split(' ')[0];
+
             return (
               <button
+                type="button"
                 key={value}
                 onClick={() =>
                   setSelectedDate(value)
@@ -1246,11 +1377,7 @@ export const ShiftsPage: React.FC = () => {
                 }`}
               >
                 <span className="block truncate text-[10px] font-semibold uppercase sm:text-xs">
-                  {
-                    shortDate(date).split(
-                      ' ',
-                    )[0]
-                  }
+                  {weekday}
                 </span>
 
                 <span className="mt-0.5 block text-sm font-bold sm:text-base">
@@ -1262,7 +1389,7 @@ export const ShiftsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* CONTENT */}
       {loading ? (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-gray-200 bg-white">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
@@ -1290,98 +1417,274 @@ export const ShiftsPage: React.FC = () => {
                     Assenze / note
                   </th>
 
-                  <th className="w-[110px] px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Azioni
-                  </th>
+                  {canManage && (
+                    <th className="w-[110px] px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Azioni
+                    </th>
+                  )}
                 </tr>
               </thead>
 
               <tbody>
-                {SLOTS.filter(
-                  (slot) =>
-                    slot.key !==
-                    'tutto_giorno',
-                ).map((slot) => {
-                  const Icon = slot.icon;
+                {SHIFT_SLOTS.map(
+                  (slot) => {
+                    const Icon = slot.icon;
 
-                  const rows =
-                    shiftsBySlot.get(
-                      slot.key as ShiftSlot,
-                    ) || [];
+                    const rows =
+                      shiftsBySlot.get(
+                        slot.key,
+                      ) ?? [];
 
-                  const absenceRows =
-                    absencesBySlot.get(
-                      slot.key,
-                    ) || [];
+                    const absenceRows =
+                      absencesBySlot.get(
+                        slot.key,
+                      ) ?? [];
 
-                  return (
-                    <tr
-                      key={slot.key}
-                      className="border-b border-gray-100 align-top last:border-0"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                            <Icon className="h-5 w-5" />
+                    return (
+                      <tr
+                        key={slot.key}
+                        className="border-b border-gray-100 align-top last:border-0"
+                      >
+                        {/* SLOT */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                              <Icon className="h-5 w-5" />
+                            </div>
+
+                            <div>
+                              <p className="font-bold text-gray-900">
+                                {slot.label}
+                              </p>
+
+                              <p className="text-xs text-gray-500">
+                                {slot.subtitle}
+                              </p>
+                            </div>
                           </div>
+                        </td>
 
-                          <div>
-                            <p className="font-bold text-gray-900">
-                              {slot.label}
-                            </p>
+                        {/* SHIFT */}
+                        <td className="px-5 py-4">
+                          {rows.length > 0 ? (
+                            <div className="flex flex-wrap items-center gap-3">
+                              {renderPeople(
+                                rows,
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">
+                              Nessun turno assegnato
+                            </span>
+                          )}
 
-                            <p className="text-xs text-gray-500">
-                              {slot.subtitle}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+                          {absenceRows.length >
+                            0 && (
+                            <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-red-700">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              Copertura da verificare
+                            </div>
+                          )}
+                        </td>
 
-                      <td className="px-5 py-4">
-                        {rows.length ? (
-                          <div className="flex flex-wrap items-center gap-3">
-                            {renderPeople(
-                              rows,
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">
-                            Nessun turno assegnato
+                        {/* TIME */}
+                        <td className="px-5 py-4">
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700">
+                            <Clock3 className="h-3.5 w-3.5" />
+
+                            {rows[0]
+                              ? `${rows[0].start_time.slice(0, 5)} — ${rows[0].end_time.slice(0, 5)}`
+                              : slot.subtitle}
                           </span>
+                        </td>
+
+                        {/* ABSENCES */}
+                        <td className="px-5 py-4">
+                          {absenceRows.length >
+                          0 ? (
+                            absenceRows.map(
+                              (absence) => {
+                                const employee =
+                                  userMap.get(
+                                    absence.user_id,
+                                  );
+
+                                if (!employee) {
+                                  return null;
+                                }
+
+                                const own =
+                                  absence.user_id ===
+                                  user?.id;
+
+                                return (
+                                  <div
+                                    key={
+                                      absence.id
+                                    }
+                                    className="mb-2 rounded-xl border border-red-100 bg-red-50 p-2.5 last:mb-0"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Avatar
+                                        src={
+                                          employee.avatar_url ??
+                                          undefined
+                                        }
+                                        alt={
+                                          employee.name
+                                        }
+                                        size="sm"
+                                        fallbackText={
+                                          employee.name
+                                        }
+                                      />
+
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-bold text-red-900">
+                                          {
+                                            employee.name
+                                          }{' '}
+                                          · Assente
+                                        </p>
+
+                                        <p className="text-[11px] text-red-700">
+                                          {absence.slot ===
+                                          'tutto_giorno'
+                                            ? 'Tutto il giorno'
+                                            : absence.note ??
+                                              'Nessuna nota'}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {own && (
+                                      <div className="mt-2 flex justify-end gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openEditAbsence(
+                                              absence,
+                                            )
+                                          }
+                                          className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                                        >
+                                          Modifica
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void removeAbsence(
+                                              absence,
+                                            )
+                                          }
+                                          className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                                        >
+                                          Elimina
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              },
+                            )
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              Nessuna assenza
+                            </span>
+                          )}
+                        </td>
+
+                        {/* ACTIONS */}
+                        {canManage && (
+                          <td className="px-5 py-4 text-right">
+                            {rows.length >
+                              0 && (
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openEditShift(
+                                      rows,
+                                    )
+                                  }
+                                  className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600"
+                                  title="Modifica coppia"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void removePair(
+                                      rows,
+                                    )
+                                  }
+                                  className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                                  title="Elimina coppia"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
                         )}
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                        {absenceRows.length >
-                          0 && (
-                          <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-red-700">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            Copertura da verificare
-                          </div>
-                        )}
-                      </td>
+          {/* MOBILE */}
+          <div className="divide-y divide-gray-100 md:hidden">
+            {SHIFT_SLOTS.map(
+              (slot) => {
+                const Icon = slot.icon;
 
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700">
-                          <Clock3 className="h-3.5 w-3.5" />
+                const rows =
+                  shiftsBySlot.get(
+                    slot.key,
+                  ) ?? [];
 
-                          {rows[0]
-                            ? `${rows[0].start_time.slice(
-                                0,
-                                5,
-                              )} — ${rows[0].end_time.slice(
-                                0,
-                                5,
-                              )}`
-                            : slot.subtitle}
-                        </span>
-                      </td>
+                const absenceRows =
+                  absencesBySlot.get(
+                    slot.key,
+                  ) ?? [];
 
-                      <td className="px-5 py-4">
-                        {absenceRows.length ? (
-                          absenceRows.map(
-                            (absence) => {
+                return (
+                  <section
+                    key={slot.key}
+                    className="p-4"
+                  >
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                        <Icon className="h-5 w-5" />
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-gray-900">
+                          {slot.label}
+                        </h3>
+
+                        <p className="text-xs text-gray-500">
+                          {slot.subtitle}
+                        </p>
+                      </div>
+                    </div>
+
+                    {rows.length >
+                    0 ? (
+                      <div className="space-y-2">
+                        {rows
+                          .slice(0, 2)
+                          .map(
+                            (shift) => {
                               const employee =
                                 userMap.get(
-                                  absence.user_id,
+                                  shift.user_id,
                                 );
 
                               if (
@@ -1393,320 +1696,287 @@ export const ShiftsPage: React.FC = () => {
                               return (
                                 <div
                                   key={
-                                    absence.id
+                                    shift.id
                                   }
-                                  className="mb-2 rounded-xl border border-red-100 bg-red-50 p-2.5 last:mb-0"
+                                  className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <Avatar
-                                      src={
-                                        employee.avatar_url ||
-                                        undefined
-                                      }
-                                      alt={
+                                  <Avatar
+                                    src={
+                                      employee.avatar_url ??
+                                      undefined
+                                    }
+                                    alt={
+                                      employee.name
+                                    }
+                                    size="md"
+                                    fallbackText={
+                                      employee.name
+                                    }
+                                  />
+
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-bold text-gray-900">
+                                      {
                                         employee.name
                                       }
-                                      size="sm"
-                                      fallbackText={
-                                        employee.name
-                                      }
-                                    />
+                                    </p>
 
-                                    <div className="min-w-0">
-                                      <p className="truncate text-xs font-bold text-red-900">
-                                        {
-                                          employee.name
-                                        }{' '}
-                                        · Assente
-                                      </p>
+                                    <p className="truncate text-xs text-gray-500">
+                                      {getRoleLabel(
+                                        employee.role,
+                                      )}
+                                    </p>
 
-                                      <p className="text-[11px] text-red-700">
-                                        {absence.slot ===
-                                        'tutto_giorno'
-                                          ? 'Tutto il giorno'
-                                          : absence.note ||
-                                            'Nessuna nota'}
-                                      </p>
-                                    </div>
+                                    <p className="mt-1 text-xs font-semibold text-amber-700">
+                                      {shift.start_time.slice(
+                                        0,
+                                        5,
+                                      )}{' '}
+                                      —
+                                      {shift.end_time.slice(
+                                        0,
+                                        5,
+                                      )}
+                                    </p>
                                   </div>
-
-                                  {absence.user_id ===
-                                    user?.id && (
-                                    <div className="mt-2 flex justify-end gap-1">
-                                      <button
-                                        onClick={() =>
-                                          openEditAbsence(
-                                            absence,
-                                          )
-                                        }
-                                        className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
-                                      >
-                                        Modifica
-                                      </button>
-
-                                      <button
-                                        onClick={() =>
-                                          void removeAbsence(
-                                            absence,
-                                          )
-                                        }
-                                        className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
-                                      >
-                                        Elimina
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
                               );
                             },
-                          )
-                        ) : (
-                          <span className="text-xs text-gray-400">
-                            Nessuna assenza
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 text-right">
-                        {canManage &&
-                          rows.length >
-                            0 && (
-                            <div className="flex justify-end gap-1">
-                              <button
-                                onClick={() =>
-                                  openEditShift(
-                                    rows,
-                                  )
-                                }
-                                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600"
-                                title="Modifica coppia"
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  void removePair(
-                                    rows,
-                                  )
-                                }
-                                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
-                                title="Elimina coppia"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
                           )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">
+                        Nessun turno assegnato
+                      </div>
+                    )}
 
-          {/* MOBILE */}
-          <div className="divide-y divide-gray-100 md:hidden">
-            {SLOTS.filter(
-              (slot) =>
-                slot.key !==
-                'tutto_giorno',
-            ).map((slot) => {
-              const Icon = slot.icon;
-
-              const rows =
-                shiftsBySlot.get(
-                  slot.key as ShiftSlot,
-                ) || [];
-
-              return (
-                <section
-                  key={slot.key}
-                  className="p-4"
-                >
-                  <div className="mb-3 flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                      <Icon className="h-5 w-5" />
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-gray-900">
-                        {slot.label}
-                      </h3>
-
-                      <p className="text-xs text-gray-500">
-                        {slot.subtitle}
-                      </p>
-                    </div>
-                  </div>
-
-                  {rows.length ? (
-                    <div className="space-y-2">
-                      {rows
-                        .slice(0, 2)
-                        .map(
-                          (shift) => {
+                    {absenceRows.length >
+                      0 && (
+                      <div className="mt-3 space-y-2">
+                        {absenceRows.map(
+                          (absence) => {
                             const employee =
                               userMap.get(
-                                shift.user_id,
+                                absence.user_id,
                               );
 
-                            if (
-                              !employee
-                            ) {
+                            if (!employee) {
                               return null;
                             }
+
+                            const own =
+                              absence.user_id ===
+                              user?.id;
 
                             return (
                               <div
                                 key={
-                                  shift.id
+                                  absence.id
                                 }
-                                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"
+                                className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-2.5"
                               >
                                 <Avatar
                                   src={
-                                    employee.avatar_url ||
+                                    employee.avatar_url ??
                                     undefined
                                   }
                                   alt={
                                     employee.name
                                   }
-                                  size="md"
+                                  size="sm"
                                   fallbackText={
                                     employee.name
                                   }
                                 />
 
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate font-bold text-gray-900">
+                                  <p className="truncate text-xs font-bold text-red-900">
                                     {
                                       employee.name
-                                    }
+                                    }{' '}
+                                    · ASSENTE
                                   </p>
 
-                                  <p className="truncate text-xs text-gray-500">
-                                    {ROLE_LABELS[
-                                      employee
-                                        .role
-                                    ] ||
-                                      employee.role}
-                                  </p>
-
-                                  <p className="mt-1 text-xs font-semibold text-amber-700">
-                                    {shift.start_time.slice(
-                                      0,
-                                      5,
-                                    )}{' '}
-                                    —{' '}
-                                    {shift.end_time.slice(
-                                      0,
-                                      5,
-                                    )}
+                                  <p className="text-[11px] text-red-700">
+                                    {absence.slot ===
+                                    'tutto_giorno'
+                                      ? 'Tutto il giorno'
+                                      : absence.note ??
+                                        'Assenza registrata'}
                                   </p>
                                 </div>
+
+                                {own && (
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openEditAbsence(
+                                          absence,
+                                        )
+                                      }
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"
+                                    >
+                                      <Edit3 className="h-3.5 w-3.5 text-red-700" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void removeAbsence(
+                                          absence,
+                                        )
+                                      }
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-100"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 text-red-700" />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           },
                         )}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">
-                      Nessun turno assegnato
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {renderAbsences(
-                    slot.key as ShiftSlot,
-                  )}
-                </section>
-              );
-            })}
+                    {canManage &&
+                      rows.length > 0 && (
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditShift(
+                                rows,
+                              )
+                            }
+                            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                          >
+                            Modifica
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void removePair(
+                                rows,
+                              )
+                            }
+                            className="rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50"
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      )}
+                  </section>
+                );
+              },
+            )}
           </div>
         </div>
       )}
 
-      {/* SHIFT EDITOR */}
-      {editor === 'shift' &&
-        canManage && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">
-                    {editingIds.length
-                      ? 'Modifica coppia'
-                      : 'Aggiungi turno'}
-                  </h2>
+      {/* SHIFT MODAL */}
+      {editor === 'shift' && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {editingShiftIds.length
+                    ? 'Modifica coppia'
+                    : 'Aggiungi turno'}
+                </h2>
 
-                  <p className="text-xs text-gray-500">
-                    {displayDate(
-                      selectedDate,
-                    )}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() =>
-                    setEditor(null)
-                  }
-                  className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"
-                >
-                  <X />
-                </button>
+                <p className="text-xs capitalize text-gray-500">
+                  {displayDate(
+                    selectedDate,
+                  )}
+                </p>
               </div>
 
-              <div className="mt-5 space-y-4">
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
-                    Fascia
-                  </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditor(null)
+                }
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100"
+              >
+                <X />
+              </button>
+            </div>
 
-                  <select
-                    value={form.slot}
-                    onChange={(event) => {
-                      const slot =
-                        slotInfo(
-                          event.target
-                            .value as ShiftSlot,
-                        );
+            <div className="mt-5 space-y-4">
+              {/* SLOT */}
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                  Fascia
+                </span>
 
-                      setForm(
-                        (value) => ({
-                          ...value,
-                          slot:
-                            event.target
-                              .value as ShiftSlot,
-                          start:
-                            slot.from,
-                          end:
-                            slot.to,
-                        }),
-                      );
-                    }}
-                    className="h-11 w-full rounded-xl border border-gray-200 px-3"
-                  >
-                    {SLOTS.filter(
-                      (slot) =>
-                        slot.key !==
-                        'tutto_giorno',
-                    ).map((slot) => (
+                <select
+                  value={
+                    shiftForm.slot
+                  }
+                  onChange={(event) =>
+                    handleSlotChange(
+                      event.target
+                        .value as ShiftSlot,
+                    )
+                  }
+                  className="h-11 w-full rounded-xl border border-gray-200 px-3"
+                >
+                  {SHIFT_SLOTS.map(
+                    (slot) => (
                       <option
                         key={slot.key}
-                        value={slot.key}
+                        value={
+                          slot.key
+                        }
                       >
                         {slot.label} ·{' '}
-                        {slot.subtitle}
+                        {
+                          slot.subtitle
+                        }
                       </option>
-                    ))}
-                  </select>
-                </label>
+                    ),
+                  )}
+                </select>
+              </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {form.userIds.map(
-                    (id, index) => (
+              {/* USERS */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {shiftForm.userIds.map(
+                  (
+                    selectedId,
+                    index,
+                  ) => {
+                    /**
+                     * Nel secondo select escludiamo
+                     * la persona selezionata nel primo.
+                     */
+                    const options =
+                      availableShiftUsers.filter(
+                        (employee) =>
+                          employee.id ===
+                            selectedId ||
+                          !shiftForm.userIds
+                            .filter(
+                              (
+                                _,
+                                currentIndex,
+                              ) =>
+                                currentIndex !==
+                                index,
+                            )
+                            .includes(
+                              employee.id,
+                            ),
+                      );
+
+                    return (
                       <label
                         key={index}
+                        className="block"
                       >
                         <span className="mb-1.5 block text-sm font-semibold text-gray-700">
                           Persona{' '}
@@ -1714,165 +1984,212 @@ export const ShiftsPage: React.FC = () => {
                         </span>
 
                         <select
-                          value={id}
+                          value={
+                            selectedId
+                          }
                           onChange={(
                             event,
-                          ) =>
-                            setForm(
+                          ) => {
+                            const value =
+                              event.target
+                                .value;
+
+                            setShiftForm(
                               (
-                                value,
+                                current,
                               ) => ({
-                                ...value,
+                                ...current,
                                 userIds:
-                                  value.userIds.map(
+                                  current.userIds.map(
                                     (
-                                      current,
-                                      i,
+                                      currentId,
+                                      currentIndex,
                                     ) =>
-                                      i ===
+                                      currentIndex ===
                                       index
-                                        ? event
-                                            .target
-                                            .value
-                                        : current,
-                                  ) as [
-                                    string,
-                                    string,
-                                  ],
+                                        ? value
+                                        : currentId,
+                                  ),
                               }),
-                            )
-                          }
+                            );
+                          }}
                           className="h-11 w-full rounded-xl border border-gray-200 px-3"
                         >
-                          {users.map(
-                            (item) => (
+                          <option value="">
+                            Seleziona persona
+                          </option>
+
+                          {options.map(
+                            (
+                              employee,
+                            ) => (
                               <option
                                 key={
-                                  item.id
+                                  employee.id
                                 }
                                 value={
-                                  item.id
+                                  employee.id
                                 }
                               >
                                 {
-                                  item.name
+                                  employee.name
                                 }{' '}
                                 ·{' '}
-                                {ROLE_LABELS[
-                                  item
-                                    .role
-                                ] ||
-                                  item.role}
+                                {getRoleLabel(
+                                  employee.role,
+                                )}
                               </option>
                             ),
                           )}
                         </select>
                       </label>
-                    ),
-                  )}
+                    );
+                  },
+                )}
+              </div>
+
+              {/* ABSENCE WARNING */}
+              {absencesBySlot.get(
+                shiftForm.slot,
+              )?.length ? (
+                <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+
+                    <div>
+                      <p className="font-bold">
+                        Persone assenti in questa fascia
+                      </p>
+
+                      <p className="mt-1">
+                        Le persone assenti non
+                        vengono mostrate nella
+                        selezione.
+                      </p>
+                    </div>
+                  </div>
                 </div>
+              ) : null}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">
-                      Inizio
-                    </span>
-
-                    <input
-                      type="time"
-                      value={
-                        form.start
-                      }
-                      onChange={(event) =>
-                        setForm(
-                          (value) => ({
-                            ...value,
-                            start:
-                              event.target
-                                .value,
-                          }),
-                        )
-                      }
-                      className="h-11 w-full rounded-xl border border-gray-200 px-3"
-                    />
-                  </label>
-
-                  <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">
-                      Fine
-                    </span>
-
-                    <input
-                      type="time"
-                      value={
-                        form.end
-                      }
-                      onChange={(event) =>
-                        setForm(
-                          (value) => ({
-                            ...value,
-                            end:
-                              event.target
-                                .value,
-                          }),
-                        )
-                      }
-                      className="h-11 w-full rounded-xl border border-gray-200 px-3"
-                    />
-                  </label>
+              {!hasEnoughUsers && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800">
+                  Non ci sono almeno due persone
+                  disponibili per questa fascia.
                 </div>
+              )}
 
-                <textarea
-                  value={form.notes}
-                  onChange={(event) =>
-                    setForm(
-                      (value) => ({
-                        ...value,
-                        notes:
-                          event.target
+              {/* TIME */}
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Inizio
+                  </span>
+
+                  <input
+                    type="time"
+                    value={
+                      shiftForm.start
+                    }
+                    onChange={(event) =>
+                      setShiftForm(
+                        (current) => ({
+                          ...current,
+                          start: event
+                            .target
                             .value,
-                      }),
-                    )
+                        }),
+                      )
+                    }
+                    className="h-11 w-full rounded-xl border border-gray-200 px-3"
+                  />
+                </label>
+
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Fine
+                  </span>
+
+                  <input
+                    type="time"
+                    value={
+                      shiftForm.end
+                    }
+                    onChange={(event) =>
+                      setShiftForm(
+                        (current) => ({
+                          ...current,
+                          end: event
+                            .target
+                            .value,
+                        }),
+                      )
+                    }
+                    className="h-11 w-full rounded-xl border border-gray-200 px-3"
+                  />
+                </label>
+              </div>
+
+              {/* NOTES */}
+              <textarea
+                value={
+                  shiftForm.notes
+                }
+                onChange={(event) =>
+                  setShiftForm(
+                    (current) => ({
+                      ...current,
+                      notes: event
+                        .target
+                        .value,
+                    }),
+                  )
+                }
+                rows={3}
+                maxLength={500}
+                placeholder="Nota del turno (opzionale)"
+                className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+              />
+
+              {/* ACTIONS */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditor(null)
                   }
-                  rows={3}
-                  maxLength={500}
-                  placeholder="Nota del turno (opzionale)"
-                  className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
-                />
+                  className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold"
+                >
+                  Annulla
+                </button>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() =>
-                      setEditor(null)
-                    }
-                    className="min-h-11 flex-1 rounded-xl border border-gray-200 font-semibold"
-                  >
-                    Annulla
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      void saveShift()
-                    }
-                    disabled={saving}
-                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 font-bold text-gray-950 disabled:opacity-60"
-                  >
-                    {saving ? (
-                      'Salvataggio...'
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4" />
-                        Salva
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void saveShift()
+                  }
+                  disabled={
+                    saving ||
+                    !shiftForm.userIds[0] ||
+                    !shiftForm.userIds[1]
+                  }
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 font-bold text-gray-950 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? (
+                    'Salvataggio...'
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Salva
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-      {/* ABSENCE EDITOR */}
+      {/* ABSENCE MODAL */}
       {editor === 'absence' && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
@@ -1900,6 +2217,7 @@ export const ShiftsPage: React.FC = () => {
               </div>
 
               <button
+                type="button"
                 onClick={() =>
                   setEditor(null)
                 }
@@ -1910,24 +2228,27 @@ export const ShiftsPage: React.FC = () => {
             </div>
 
             <div className="mt-5 space-y-4">
+              {/* USER */}
               <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
                 <Avatar
                   src={
-                    user?.avatar_url ||
+                    user?.avatar_url ??
                     undefined
                   }
                   alt={
-                    user?.name || 'Tu'
+                    user?.name ??
+                    'Tu'
                   }
                   size="md"
                   fallbackText={
-                    user?.name || 'Tu'
+                    user?.name ??
+                    'Tu'
                   }
                 />
 
                 <div>
                   <p className="font-bold text-gray-900">
-                    {user?.name ||
+                    {user?.name ??
                       'Utente'}
                   </p>
 
@@ -1937,6 +2258,7 @@ export const ShiftsPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* SLOT */}
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-gray-700">
                   Fascia di assenza
@@ -1948,28 +2270,35 @@ export const ShiftsPage: React.FC = () => {
                   }
                   onChange={(event) =>
                     setAbsenceForm(
-                      (value) => ({
-                        ...value,
-                        slot:
-                          event.target
-                            .value as Slot,
+                      (current) => ({
+                        ...current,
+                        slot: event
+                          .target
+                          .value as Slot,
                       }),
                     )
                   }
                   className="h-11 w-full rounded-xl border border-gray-200 px-3"
                 >
-                  {SLOTS.map((slot) => (
-                    <option
-                      key={slot.key}
-                      value={slot.key}
-                    >
-                      {slot.label} ·{' '}
-                      {slot.subtitle}
-                    </option>
-                  ))}
+                  {SLOTS.map(
+                    (slot) => (
+                      <option
+                        key={slot.key}
+                        value={
+                          slot.key
+                        }
+                      >
+                        {slot.label} ·{' '}
+                        {
+                          slot.subtitle
+                        }
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
 
+              {/* NOTE */}
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-gray-700">
                   Nota
@@ -1981,11 +2310,11 @@ export const ShiftsPage: React.FC = () => {
                   }
                   onChange={(event) =>
                     setAbsenceForm(
-                      (value) => ({
-                        ...value,
-                        note:
-                          event.target
-                            .value,
+                      (current) => ({
+                        ...current,
+                        note: event
+                          .target
+                          .value,
                       }),
                     )
                   }
@@ -1997,14 +2326,18 @@ export const ShiftsPage: React.FC = () => {
               </label>
 
               <div className="rounded-xl bg-red-50 p-3 text-xs text-red-800">
-                <strong>Nota:</strong>{' '}
+                <strong>
+                  Nota:
+                </strong>{' '}
                 comunichi solo la tua assenza.
                 I gradi alti verranno avvisati
                 automaticamente in tempo reale.
               </div>
 
+              {/* ACTIONS */}
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() =>
                     setEditor(null)
                   }
@@ -2014,18 +2347,22 @@ export const ShiftsPage: React.FC = () => {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() =>
                     void saveAbsence()
                   }
                   disabled={saving}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 font-bold text-white disabled:opacity-60"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? (
                     'Salvataggio...'
                   ) : (
                     <>
                       <Save className="h-4 w-4" />
-                      Comunica assenza
+
+                      {editingAbsenceId
+                        ? 'Salva modifica'
+                        : 'Comunica assenza'}
                     </>
                   )}
                 </button>
@@ -2037,3 +2374,4 @@ export const ShiftsPage: React.FC = () => {
     </div>
   );
 };
+```
