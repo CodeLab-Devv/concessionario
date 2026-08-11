@@ -12,13 +12,14 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
     }
 
     let mounted = true;
+    const userId = user.id;
     setIsOnService(Boolean(user.isOnService));
 
     const refresh = async () => {
       const { data, error } = await supabase
         .from('users')
         .select('is_on_service')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle();
 
       if (!error && mounted) {
@@ -29,10 +30,10 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
     void refresh();
 
     const channel = supabase
-      .channel(`service-status-${user.id}`)
+      .channel(`service-status-${userId}-${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${user.id}` },
+        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
         payload => {
           if (!mounted) return;
           setIsOnService(Boolean((payload.new as { is_on_service?: boolean }).is_on_service));
@@ -44,7 +45,7 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
       mounted = false;
       void supabase.removeChannel(channel);
     };
-  }, [user?.id, user?.isOnService]);
+  }, [user?.id]);
 
   return isOnService;
 };
