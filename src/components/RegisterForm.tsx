@@ -72,7 +72,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleMode }) => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 flex items-center justify-center px-4 relative overflow-hidden transition-all duration-1000">
+    <div className="app-viewport bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 flex items-center justify-center px-4 relative overflow-hidden transition-all duration-1000">
       {/* Video di sfondo */}
       <video
         autoPlay

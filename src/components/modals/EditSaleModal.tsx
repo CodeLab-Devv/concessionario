@@ -66,13 +66,14 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, o
   if (!isOpen || !sale) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+    <div className="safe-area-overlay fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="modal-shell w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Modifica Vendita Concessionario</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Chiudi"
+            className="flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600"
           >
             <X className="h-6 w-6" />
           </button>
@@ -184,11 +185,11 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, o
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Sconto</label>
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setDiscountType('employee')}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'employee' 
+                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'employee'
                   ? 'bg-blue-600 text-white' 
                   : 'bg-gray-200 text-gray-700'}`}
               >
@@ -197,7 +198,7 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, o
               <button
                 type="button"
                 onClick={() => setDiscountType('collaboration')}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'collaboration' 
+                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${discountType === 'collaboration'
                   ? 'bg-purple-600 text-white' 
                   : 'bg-gray-200 text-gray-700'}`}
               >
@@ -206,7 +207,7 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, o
               <button
                 type="button"
                 onClick={() => setDiscountType(null)}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium ${!discountType 
+                className={`min-h-11 flex-1 py-2 px-4 rounded-lg font-medium ${!discountType
                   ? 'bg-gray-600 text-white' 
                   : 'bg-gray-200 text-gray-700'}`}
               >
@@ -219,14 +220,14 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, o
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-400 transition-colors"
+              className="min-h-11 flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-400"
             >
               Annulla
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="min-h-11 flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Salvataggio...' : 'Salva'}
             </button>

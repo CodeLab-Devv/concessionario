@@ -72,7 +72,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="app-viewport bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
@@ -93,7 +93,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
                 name="name"
                 type="text"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 text-base border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Nome completo"
                 value={formData.name}
                 onChange={handleChange}
@@ -108,7 +108,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
                 name="email"
                 type="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 text-base border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Indirizzo email"
                 value={formData.email}
                 onChange={handleChange}
@@ -123,7 +123,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
                 name="password"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 text-base border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
@@ -138,7 +138,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
                 name="confirmPassword"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 text-base border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Conferma password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
@@ -152,7 +152,7 @@ export const OwnerRegistrationForm: React.FC<OwnerRegistrationFormProps> = ({ on
                 id="ownerKey"
                 name="ownerKey"
                 type="password"
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 text-base border border-gray-300 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Chiave proprietario (opzionale)"
                 value={formData.ownerKey}
                 onChange={handleChange}

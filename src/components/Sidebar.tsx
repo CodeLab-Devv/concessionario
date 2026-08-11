@@ -65,19 +65,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       
       {/* Sidebar */}
       <aside 
-        className={`fixed lg:relative z-50 h-full bg-white shadow-lg transition-all duration-300 ${isOpen ? 'w-64' : 'w-0 lg:w-20'} overflow-hidden`}
+        className={`app-viewport-height safe-area-bottom fixed lg:relative z-50 bg-white shadow-lg transition-all duration-300 ${isOpen ? 'w-64' : 'w-0 lg:w-20'} overflow-hidden`}
       >
         {/* Toggle button - right side when open */}
         {isOpen && (
           <button
             onClick={onToggle}
-            className="absolute -right-1 top-1/2 transform -translate-y-1/2 z-10 w-10 h-14 bg-white shadow-lg rounded-r-lg flex items-center justify-center text-amber-500 hover:bg-amber-50 hover:text-amber-600 transition-all duration-200 border border-gray-200"
+            aria-label="Chiudi menu"
+            className="absolute -right-1 top-1/2 z-10 flex h-14 w-11 -translate-y-1/2 items-center justify-center rounded-r-lg border border-gray-200 bg-white text-amber-500 shadow-lg hover:bg-amber-50 hover:text-amber-600"
           >
             <ChevronLeft className="h-6 w-6" />
           </button>
         )}
         {/* Header */}
-        <div className="flex items-center p-4 border-b border-gray-200">
+        <div className="safe-area-top flex items-center border-b border-gray-200 p-4">
           <div className={`flex items-center ${isOpen ? 'space-x-3' : 'justify-center w-full'}`}>
             <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg flex items-center justify-center">
               <Users className="h-5 w-5 text-white" />
@@ -107,8 +108,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-gray-700 hover:bg-gray-100'
                   }
                   ${isOpen 
-                    ? 'space-x-3 px-3 py-2.5' 
-                    : 'justify-center p-2.5'
+                    ? 'min-h-11 space-x-3 px-3 py-2.5'
+                    : 'min-h-11 justify-center p-2.5'
                   }
                 `}
                 title={!isOpen ? item.label : undefined}

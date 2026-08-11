@@ -3,6 +3,56 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-viewport {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-viewport-height {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.safe-area-overlay {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
+.safe-area-top {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.safe-area-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.modal-shell {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 640px) {
+  .modal-shell {
+    max-height: calc(100vh - 3rem);
+    max-height: calc(100dvh - 3rem);
+  }
+}
+
 /* Animazioni personalizzate per Aurum Motors Concessionario */
 @keyframes fadeIn {
   from {
@@ -129,13 +179,15 @@
 }
 
 /* Effetti hover personalizzati */
-.hover-lift {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
+@media (hover: hover) {
+  .hover-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
 
-.hover-lift:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  .hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  }
 }
 
 /* Scrollbar personalizzata - solo per elementi scuri */
@@ -183,11 +235,13 @@
   --ring-offset-color: #1f2937;
 }
 
-/* Transizioni fluide globali */
-* {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+/* Transizioni fluide globali solo per dispositivi con hover */
+@media (hover: hover) {
+  * {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
 }
 
 /* Animazioni moderne per dashboard */

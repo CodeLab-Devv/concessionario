@@ -4,7 +4,7 @@ import { Dashboard } from './Dashboard';
 import { AdminPage } from './AdminPage';
 import { DocumentsPage } from './DocumentsPage';
 import { Header } from './Header';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const MainLayout: React.FC = () => {
@@ -23,6 +23,7 @@ export const MainLayout: React.FC = () => {
   // Save page to localStorage whenever it changes
   const handlePageChange = (page: 'dashboard' | 'admin' | 'documents') => {
     setCurrentPage(page);
+    setIsSidebarOpen(false);
     localStorage.setItem('currentPage', page);
   };
 
@@ -38,7 +39,7 @@ export const MainLayout: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="app-viewport-height flex bg-gray-50">
       {/* Sidebar */}
       <Sidebar 
         isOpen={isSidebarOpen}
@@ -52,13 +53,23 @@ export const MainLayout: React.FC = () => {
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 w-8 h-12 bg-white shadow-md rounded-r-lg flex items-center justify-center text-amber-500 hover:bg-amber-50 transition-all duration-200"
+            aria-label="Apri menu"
+            className="absolute left-2 top-3 z-30 flex h-11 w-11 items-center justify-center rounded-lg bg-white text-amber-500 shadow-md hover:bg-amber-50 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Apri barra laterale"
+            className="absolute left-0 top-1/2 z-10 hidden h-12 w-11 -translate-y-1/2 items-center justify-center rounded-r-lg bg-white text-amber-500 shadow-md hover:bg-amber-50 lg:flex"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
         )}
         <Header />
-        <div className="flex-1 overflow-auto p-6">
+        <div className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
           {currentPage === 'dashboard' ? (
             <Dashboard />
           ) : currentPage === 'documents' ? (

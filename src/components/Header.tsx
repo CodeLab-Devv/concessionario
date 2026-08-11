@@ -47,19 +47,20 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <h1 className="text-xl font-bold text-gray-900">AURUM MOTORS</h1>
+        <div className="flex h-16 min-w-0 items-center justify-between gap-2">
+          <div className="min-w-0 flex items-center">
+            <div className="min-w-0 flex-shrink">
+              <h1 className="truncate text-base font-bold text-gray-900 sm:text-xl">AURUM MOTORS</h1>
             </div>
           </div>
           
-          <div className="flex items-center space-x-3">
+          <div className="min-w-0 flex shrink-0 items-center gap-1.5 sm:gap-3">
             {isAuthenticated && (
               <button
                 onClick={handleToggleServiceStatus}
                 disabled={isLoading}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                aria-label={user?.isOnService ? 'In servizio' : 'Fuori servizio'}
+                className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors sm:min-w-0 sm:px-3 ${
                   user?.isOnService 
                     ? 'bg-green-100 text-green-800 hover:bg-green-200' 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -68,12 +69,12 @@ export const Header: React.FC = () => {
                 {user?.isOnService ? (
                   <>
                     <CircleDot className="h-4 w-4 text-green-600" />
-                    <span>In servizio</span>
+                    <span className="hidden sm:inline">In servizio</span>
                   </>
                 ) : (
                   <>
                     <Circle className="h-4 w-4 text-gray-500" />
-                    <span>Fuori servizio</span>
+                    <span className="hidden sm:inline">Fuori servizio</span>
                   </>
                 )}
                 {isLoading && (
@@ -84,7 +85,7 @@ export const Header: React.FC = () => {
 
             <button 
               onClick={() => setShowProfileModal(true)}
-              className="flex items-center space-x-2 border-l border-gray-200 pl-3 hover:bg-gray-50 rounded-lg transition-colors p-2 -m-2"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border-l border-gray-200 p-2 hover:bg-gray-50 sm:min-w-0 sm:justify-start sm:space-x-2 sm:pl-3"
               title="Visualizza profilo"
             >
               <div className="relative">
@@ -98,11 +99,11 @@ export const Header: React.FC = () => {
                   fallbackText={user?.name || 'U'}
                 />
               </div>
-              <div className="text-left">
-                <div className="text-sm font-medium text-gray-900">{user?.name}</div>
-                <div className="flex items-center">
+              <div className="hidden min-w-0 text-left sm:block">
+                <div className="max-w-32 truncate text-sm font-medium text-gray-900">{user?.name}</div>
+                <div className="flex min-w-0 items-center">
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${getRoleColor(user?.role || '')}`}>
-                    {getRoleLabel(user?.role || '')}
+                    <span className="block max-w-28 truncate">{getRoleLabel(user?.role || '')}</span>
                   </span>
                 </div>
               </div>
@@ -110,7 +111,7 @@ export const Header: React.FC = () => {
             
             <button 
               onClick={logout}
-              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
               title="Esci"
             >
               <LogOut className="h-5 w-5" />
