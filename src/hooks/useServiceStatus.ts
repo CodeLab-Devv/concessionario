@@ -13,7 +13,9 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
 
     let mounted = true;
     const userId = user.id;
-    setIsOnService(Boolean(user.isOnService));
+    const initialStatus = Boolean(user.isOnService);
+
+    setIsOnService(initialStatus);
 
     const refresh = async () => {
       const { data, error } = await supabase
@@ -30,16 +32,33 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
     void refresh();
 
     const channel = supabase
-      .channel(`service-status-${userId}-${crypto.randomUUID()}`)
+      .channel(`service-status-${userId}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
+        { event: '*', schema: 'public', table: 'users' },
         payload => {
           if (!mounted) return;
-          setIsOnService(Boolean((payload.new as { is_on_service?: boolean }).is_on_service));
-        }
+
+          const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as {
+            id?: string;
+            is_on_service?: boolean | null;
+          } | null;
+
+          if (!row?.id || String(row.id) !== String(userId)) return;
+
+          if (payload.eventType === 'DELETE') {
+            setIsOnService(false);
+            return;
+          }
+
+          setIsOnService(Boolean(row.is_on_service));
+        },
       )
-      .subscribe();
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          void refresh();
+        }
+      });
 
     return () => {
       mounted = false;
