@@ -71,8 +71,7 @@ export const Header: React.FC = () => {
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-8">
         <div className="flex min-h-16 items-center justify-between gap-3 py-2">
           <div className="min-w-0">
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600 sm:text-[10px]">Concessionario</p>
-            <h1 className="truncate text-base font-bold tracking-tight text-slate-900 sm:text-lg">Aurum Motors</h1>
+            <img src="/aurum-motors-logo.svg" alt="Aurum Motors" className="h-9 w-auto max-w-[12rem] sm:h-10 sm:max-w-[14rem]" draggable={false} />
           </div>
 
           {isAuthenticated && (
