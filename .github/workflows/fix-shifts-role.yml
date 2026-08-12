@@ -1,0 +1,37 @@
+name: Fix shifts role visibility
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hide shift creation from employees
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ShiftsPage.tsx')
+          s = p.read_text()
+          old = '''            <button\n              type="button"\n              onClick={() =>\n                openCreateShift()\n              }\n              disabled={\n                !canManage ||\n                users.length < 2 ||\n                saving\n              }\n              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-50"\n            >\n              <Plus className="h-5 w-5" />\n              Aggiungi turno\n            </button>'''
+          new = '''            {canManage && (\n              <button\n                type="button"\n                onClick={() =>\n                  openCreateShift()\n                }\n                disabled={\n                  users.length < 2 ||\n                  saving\n                }\n                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-50"\n              >\n                <Plus className="h-5 w-5" />\n                Aggiungi turno\n              </button>\n            )}'''
+          if old not in s:
+              raise SystemExit('Target button block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit and cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ShiftsPage.tsx .github/workflows/fix-shifts-role.yml
+          git commit -m 'fix: hide add shift from non-managers' || exit 0
+          git rm .github/workflows/fix-shifts-role.yml
+          git commit -m 'chore: remove temporary shifts fix workflow'
+          git push
