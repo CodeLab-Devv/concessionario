@@ -1,0 +1,80 @@
+name: fix-realtime-types
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'trigger realtime type fix')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Patch realtime types
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def patch(path: str, transform):
+              p = Path(path)
+              s = p.read_text()
+              n = transform(s)
+              if n == s:
+                  raise SystemExit(f'No changes made to {path}')
+              p.write_text(n)
+
+          activity_helpers = """\n\ntype RealtimeRow = Record<string, unknown>;\nconst readString = (row: RealtimeRow, key: string, fallback = ''): string => {\n  const value = row[key];\n  return typeof value === 'string' ? value : fallback;\n};\nconst readNumber = (row: RealtimeRow, key: string, fallback = 0): number => {\n  const value = row[key];\n  return typeof value === 'number' ? value : Number(value) || fallback;\n};\n"""
+
+          def activity(s: str) -> str:
+              marker = "import { useAuth } from '../context/AuthContext';"
+              if 'type RealtimeRow = Record<string, unknown>;' not in s:
+                  s = s.replace(marker, marker + activity_helpers, 1)
+              old = re.search(r"  useEffect\(\(\)=>\{if\(!isHighRank\|\|!isOnService\)return;const toSale=.*?\n\n  const filtered", s, re.S)
+              if not old:
+                  raise SystemExit('Activity realtime block not found')
+              new = """  useEffect(() => {\n    if (!isHighRank || !isOnService) return;\n\n    const toSale = (row: RealtimeRow): Sale => ({\n      id: readString(row, 'id'),\n      employeeId: readString(row, 'employee_id'),\n      employeeName: readString(row, 'employee_name'),\n      itemName: readString(row, 'item_name'),\n      carModel: row.car_model ?? undefined,\n      price: readNumber(row, 'price'),\n      quantity: readNumber(row, 'quantity'),\n      total: readNumber(row, 'total'),\n      date: readString(row, 'date', new Date().toISOString().slice(0, 10)),\n      type: 'sale',\n      category: 'concessionari',\n      discountType: row.discount_type ?? undefined,\n      created_at: readString(row, 'created_at', new Date().toISOString()),\n    });\n\n    const channel = supabase\n      .channel('activity-live')\n      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales' }, payload => {\n        const row = toSale(payload.new as RealtimeRow);\n        setSales(current => current.some(item => item.id === row.id) ? current : [row, ...current]);\n      })\n      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sales' }, payload => {\n        const row = toSale(payload.new as RealtimeRow);\n        setSales(current => current.some(item => item.id === row.id) ? current.map(item => item.id === row.id ? row : item) : [row, ...current]);\n      })\n      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sales' }, payload => {\n        const id = (payload.old as { id?: string }).id;\n        if (id) setSales(current => current.filter(item => item.id !== id));\n      })\n      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, payload => {\n        const row = (payload.new || payload.old) as RealtimeRow;\n        const id = readString(row, 'id');\n        if (!id) return;\n        if (payload.eventType === 'DELETE') {\n          setUsers(current => current.filter(item => item.id !== id));\n          return;\n        }\n        const mapped = row as unknown as User;\n        setUsers(current => current.some(item => item.id === mapped.id) ? current.map(item => item.id === mapped.id ? { ...item, ...mapped } : item) : [...current, mapped]);\n      })\n      .subscribe();\n\n    return () => {\n      void supabase.removeChannel(channel);\n    };\n  }, [isHighRank, isOnService]);\n\n  const filtered"""
+              return s[:old.start()] + new + s[old.end():]
+
+          patch('src/components/ActivityPage.tsx', activity)
+
+          def admin(s: str) -> str:
+              marker = "import { useAuth } from '../context/AuthContext';"
+              helper = """\n\ntype AdminRealtimeRow = Record<string, unknown>;\nconst adminString = (row: AdminRealtimeRow, key: string, fallback = ''): string => {\n  const value = row[key];\n  return typeof value === 'string' ? value : fallback;\n};\nconst adminNumber = (row: AdminRealtimeRow, key: string, fallback = 0): number => {\n  const value = row[key];\n  return typeof value === 'number' ? value : Number(value) || fallback;\n};\n"""
+              if 'type AdminRealtimeRow = Record<string, unknown>;' not in s:
+                  s = s.replace(marker, marker + helper, 1)
+              old = re.search(r"  const handleUsersRealtimeChange=.*?\n  useRealtimeSubscription\(\{table:'sales'", s, re.S)
+              if not old:
+                  raise SystemExit('Admin realtime block not found')
+              new = """  const handleUsersRealtimeChange = useCallback((payload: RealtimePayload) => {\n    const row = (payload.new || payload.old) as AdminRealtimeRow;\n    const id = adminString(row, 'id');\n    if (!id) return;\n\n    setEmployees(current => {\n      if (payload.eventType === 'DELETE') return current.filter(item => item.id !== id);\n\n      const next: EmployeeRevenue = {\n        id,\n        name: adminString(row, 'name'),\n        email: adminString(row, 'email'),\n        role: adminString(row, 'role'),\n        revenue: 0,\n        commission: getDefaultCommission(adminString(row, 'role')),\n        availability: (typeof row.availability === 'object' && row.availability !== null ? row.availability : {}) as Availability,\n      };\n      const existing = current.find(item => item.id === next.id);\n      return existing ? current.map(item => item.id === next.id ? { ...item, ...next, revenue: item.revenue } : item) : [...current, next];\n    });\n  }, []);\n\n  const handleSalesRealtimeChange = useCallback((payload: RealtimePayload) => {\n    const next = payload.new as AdminRealtimeRow | null;\n    const previous = payload.old as AdminRealtimeRow | null;\n    const nextEmployeeId = next ? adminString(next, 'employee_id') : null;\n    const previousEmployeeId = previous ? adminString(previous, 'employee_id') : null;\n    const nextTotal = next ? adminNumber(next, 'total') : 0;\n    const previousTotal = previous ? adminNumber(previous, 'total') : 0;\n\n    setEmployees(current => current.map(employee => {\n      let delta = 0;\n      if (payload.eventType === 'INSERT' && employee.id === nextEmployeeId) delta = nextTotal;\n      if (payload.eventType === 'DELETE' && employee.id === previousEmployeeId) delta = -previousTotal;\n      if (payload.eventType === 'UPDATE') {\n        if (employee.id === previousEmployeeId) delta -= previousTotal;\n        if (employee.id === nextEmployeeId) delta += nextTotal;\n      }\n      return delta ? { ...employee, revenue: Math.max(0, employee.revenue + delta) } : employee;\n    }));\n  }, []);\n\n  useRealtimeSubscription({table:'sales'"""
+              return s[:old.start()] + new + s[old.end():]
+
+          patch('src/components/AdminPage.tsx', admin)
+
+          def dashboard(s: str) -> str:
+              helper = """\n\ntype DashboardRealtimeRow = Record<string, unknown>;\nconst dashboardString = (row: DashboardRealtimeRow, key: string, fallback = ''): string => {\n  const value = row[key];\n  return typeof value === 'string' ? value : fallback;\n};\nconst dashboardNumber = (row: DashboardRealtimeRow, key: string, fallback = 0): number => {\n  const value = row[key];\n  return typeof value === 'number' ? value : Number(value) || fallback;\n};\n"""
+              marker = "import { useAuth } from '../context/AuthContext';"
+              if 'type DashboardRealtimeRow = Record<string, unknown>;' not in s:
+                  s = s.replace(marker, marker + helper, 1)
+              s = s.replace("const mapSaleRow=(row:Record<string,any>):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:row.type,category:row.category,created_at:row.created_at||new Date().toISOString()});", "const mapSaleRow = (row: DashboardRealtimeRow): Sale => ({ id: dashboardString(row, 'id'), employeeId: dashboardString(row, 'employee_id'), employeeName: dashboardString(row, 'employee_name'), itemName: dashboardString(row, 'item_name'), carModel: typeof row.car_model === 'string' ? row.car_model : undefined, price: dashboardNumber(row, 'price'), quantity: dashboardNumber(row, 'quantity'), total: dashboardNumber(row, 'total'), date: dashboardString(row, 'date', new Date().toISOString().slice(0, 10)), type: typeof row.type === 'string' ? row.type : undefined, category: typeof row.category === 'string' ? row.category : undefined, created_at: dashboardString(row, 'created_at', new Date().toISOString()) });")
+              s = s.replace("const handleDashboardUserRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};", "const handleDashboardUserRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail as {eventType?: string; new?: DashboardRealtimeRow | null; old?: DashboardRealtimeRow | null};")
+              s = s.replace("name:String(nextRow.name||''),email:String(nextRow.email||''),role:nextRow.role,employeeType:nextRow.employee_type||undefined,department:'Concessionario',hireDate:String(nextRow.created_at||'').split('T')[0],totalSales:existing?.totalSales||0,isOnService:Boolean(nextRow.is_on_service),lastServiceStatusChange:nextRow.last_service_status_change||undefined,avatar_url:nextRow.avatar_url||undefined", "name:dashboardString(nextRow, 'name'),email:dashboardString(nextRow, 'email'),role:dashboardString(nextRow, 'role'),employeeType:typeof nextRow.employee_type === 'string' ? nextRow.employee_type : undefined,department:'Concessionario',hireDate:dashboardString(nextRow, 'created_at').split('T')[0],totalSales:existing?.totalSales||0,isOnService:Boolean(nextRow.is_on_service),lastServiceStatusChange:typeof nextRow.last_service_status_change === 'string' ? nextRow.last_service_status_change : undefined,avatar_url:typeof nextRow.avatar_url === 'string' ? nextRow.avatar_url : undefined")
+              s = s.replace("const handleDashboardSalesRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};", "const handleDashboardSalesRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail as {eventType?: string; new?: DashboardRealtimeRow | null; old?: DashboardRealtimeRow | null};")
+              s = s.replace("const row=mapSaleRow(nextRow);", "const row=mapSaleRow(nextRow);\n            ", 2)
+              return s
+
+          patch('src/components/Dashboard.tsx', dashboard)
+          PY
+          npm ci --silent
+          npm run lint
+          npm run build
+      - name: Commit and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/fix-lint-realtime-types.yml
+          git add src .github/workflows/fix-lint-realtime-types.yml
+          git commit -m 'fix: type realtime payloads without any'
+          git push
