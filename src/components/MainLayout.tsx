@@ -12,7 +12,6 @@ import { Header } from './Header';
 import { ChevronRight, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useServiceStatus } from '../hooks/useServiceStatus';
-import { GLOBAL_REALTIME_EVENT, useGlobalRealtimeRefresh, type GlobalRealtimeChange } from '../hooks/useGlobalRealtimeRefresh';
 
 type Page = 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts' | 'activity';
 const PAGES: Page[] = ['dashboard', 'admin', 'documents', 'announcements', 'shifts', 'activity'];
@@ -22,25 +21,7 @@ export const MainLayout: React.FC = () => {
   const isOnService = useServiceStatus(user);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [realtimeRevision, setRealtimeRevision] = useState(0);
   const hasActivityAccess = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
-
-  useGlobalRealtimeRefresh(Boolean(user?.id));
-
-  useEffect(() => {
-    const handleRealtimeChange = (event: Event) => {
-      const change = (event as CustomEvent<GlobalRealtimeChange>).detail;
-      if (!change?.table) return;
-
-      // Every database mutation invalidates the currently mounted data view.
-      // Existing page-specific subscriptions still handle their optimized paths;
-      // this fallback guarantees pages without a dedicated subscription stay live.
-      setRealtimeRevision((revision) => revision + 1);
-    };
-
-    window.addEventListener(GLOBAL_REALTIME_EVENT, handleRealtimeChange);
-    return () => window.removeEventListener(GLOBAL_REALTIME_EVENT, handleRealtimeChange);
-  }, []);
 
   useEffect(() => {
     const savedPage = localStorage.getItem('currentPage') as Page | null;
@@ -90,17 +71,17 @@ export const MainLayout: React.FC = () => {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard key={`dashboard-${realtimeRevision}`} />;
+        return <Dashboard />;
       case 'activity':
-        return hasActivityAccess ? <ActivityPage key={`activity-${realtimeRevision}`} /> : null;
+        return hasActivityAccess ? <ActivityPage /> : null;
       case 'shifts':
-        return <ShiftsPage key={`shifts-${realtimeRevision}`} />;
+        return <ShiftsPage />;
       case 'announcements':
-        return <AnnouncementsPage key={`announcements-${realtimeRevision}`} />;
+        return <AnnouncementsPage />;
       case 'documents':
-        return hasDocumentsAccess ? <DocumentsPage key={`documents-${realtimeRevision}`} /> : null;
+        return hasDocumentsAccess ? <DocumentsPage /> : null;
       case 'admin':
-        return hasAdminAccess ? <AdminPage key={`admin-${realtimeRevision}`} /> : null;
+        return hasAdminAccess ? <AdminPage /> : null;
       default:
         return null;
     }
@@ -136,7 +117,7 @@ export const MainLayout: React.FC = () => {
           </button>
         )}
 
-        <Header key={`header-${realtimeRevision}`} />
+        <Header />
 
         <div className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
           {renderPage()}
