@@ -1,0 +1,17 @@
+name: apply-realtime-optimization
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  optimize:
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'trigger realtime optimizer')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply realtime optimizer
+        run: |
+          echo 'optimizer'
