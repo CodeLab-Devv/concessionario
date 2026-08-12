@@ -17,7 +17,6 @@ import {
   LockKeyhole,
   Mail,
   Save,
-  Settings2,
   ShieldCheck,
   User,
   UserCheck,
@@ -66,9 +65,6 @@ const ROLE_META: Record<string, RoleMeta> = {
   },
 };
 
-const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100';
-
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, refreshUserProfile } = useAuth();
   const { showSuccess, showError } = useNotifications();
@@ -87,14 +83,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     confirmPassword: '',
   });
 
-  const roleMeta = ROLE_META[user?.role || 'probation'] || ROLE_META.probation;
-  const initials = useMemo(() => {
-    const parts = (user?.name || 'Utente').trim().split(/\s+/).filter(Boolean);
-    return parts.slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
-  }, [user?.name]);
-
   useEffect(() => {
     if (!user || !isOpen) return;
+
     setFormData({
       name: user.name || '',
       email: user.email || '',
@@ -109,8 +100,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   useEffect(() => {
     if (!isOpen) return;
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
     return () => {
       document.body.style.overflow = previousOverflow;
     };
@@ -127,6 +120,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     if (!user || isLoading) return;
 
     setIsLoading(true);
+
     try {
       const updates: { name?: string; availability?: string } = {};
       const name = formData.name.trim();
@@ -140,6 +134,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new Error('Inserisci un indirizzo email valido.');
         }
+
         const { error: emailError } = await supabase.auth.updateUser({ email });
         if (emailError) throw new Error(`Impossibile cambiare email: ${emailError.message}`);
         showSuccess('Email aggiornata', 'Il nuovo indirizzo email è stato salvato.');
@@ -166,6 +161,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             password: formData.currentPassword,
           });
           if (reauthError) throw new Error('Password attuale non corretta.');
+
           const { error: retryError } = await supabase.auth.updateUser({ password: formData.newPassword });
           if (retryError) throw new Error(`Impossibile cambiare password: ${retryError.message}`);
         }
@@ -181,8 +177,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }
 
       await refreshUserProfile?.();
-      setFormData(previous => ({
-        ...previous,
+      setFormData(prev => ({
+        ...prev,
         email: email || user.email,
         currentPassword: '',
         newPassword: '',
@@ -212,6 +208,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     onClose();
   };
 
+  const roleMeta = ROLE_META[user?.role || 'probation'] || ROLE_META.probation;
+
   const passwordFields: Array<{
     field: PasswordField;
     label: string;
@@ -228,7 +226,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="profile-modal-title"
@@ -237,199 +235,84 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }}
     >
       <div
-        className="flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-50 sm:mx-auto sm:my-5 sm:h-[calc(100dvh-2.5rem)] sm:max-w-6xl sm:rounded-[30px] sm:border sm:border-white/70 sm:shadow-[0_30px_100px_rgba(15,23,42,0.3)]"
+        className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-5xl sm:rounded-[30px] sm:border sm:border-white/70 sm:shadow-[0_35px_110px_rgba(15,23,42,0.30)]"
         onMouseDown={event => event.stopPropagation()}
       >
-        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-          <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
-
-          <div className="relative px-5 pb-5 pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 sm:py-7 sm:pt-7">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Aurum Motors</p>
-                <h2 id="profile-modal-title" className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">Il mio profilo</h2>
-                <p className="mt-1 max-w-xl text-xs text-slate-300 sm:text-sm">Tutto ciò che riguarda il tuo account, in un unico posto.</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                aria-label="Chiudi profilo"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-slate-200 transition hover:bg-white/15 hover:text-white active:scale-95"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <header className="shrink-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.18),transparent_34%),linear-gradient(135deg,#0f172a,#1e293b)] px-5 pb-5 pt-[calc(1rem+env(safe-area-inset-top))] text-white sm:px-8 sm:py-7">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">Aurum Motors</p>
+              <h2 id="profile-modal-title" className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Il mio profilo</h2>
+              <p className="mt-1 max-w-xl text-xs leading-5 text-slate-300 sm:text-sm">Gestisci il tuo account, la disponibilità e la sicurezza da un unico spazio.</p>
             </div>
+            <button type="button" onClick={handleClose} aria-label="Chiudi profilo" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-slate-200 transition hover:bg-white/15 hover:text-white active:scale-95"><X className="h-5 w-5" /></button>
+          </div>
 
-            <div className="mt-5 flex items-center gap-4 sm:mt-6 sm:gap-5">
+          <div className="mt-5 flex items-center gap-3 overflow-x-auto pb-1 sm:mt-6 sm:max-w-md">
+            {(['profile', 'security'] as const).map(tab => {
+              const active = activeTab === tab;
+              return <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition ${active ? 'bg-white text-slate-900 shadow-sm' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'}`}>
+                {tab === 'profile' ? <User className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+                {tab === 'profile' ? 'Profilo' : 'Sicurezza'}
+              </button>;
+            })}
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
+          <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-8 sm:py-6">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
               <div className="relative shrink-0">
-                <Avatar
-                  src={currentAvatarUrl}
-                  alt={user.name}
-                  size="xl"
-                  fallbackText={initials}
-                  className="h-20 w-20 rounded-[24px] border-2 border-white/20 shadow-2xl sm:h-24 sm:w-24"
-                />
-                <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px] border-slate-900 ${user.isOnService ? 'bg-emerald-400' : 'bg-slate-400'}`} />
+                <Avatar src={currentAvatarUrl} alt={user.name} size="xl" fallbackText={user.name} className="h-24 w-24 rounded-[24px] ring-4 ring-amber-50 shadow-[0_12px_35px_rgba(15,23,42,0.14)]" />
+                <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px] border-white ${user.isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               </div>
-
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="max-w-full truncate text-2xl font-bold tracking-tight sm:text-3xl">{user.name}</h3>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${roleMeta.className}`}>
-                    {roleMeta.icon}
-                    {roleMeta.label}
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 sm:text-sm">
-                  <span className="inline-flex min-w-0 items-center gap-1.5"><Mail className="h-4 w-4 shrink-0 text-slate-400" /><span className="truncate">{user.email}</span></span>
-                  <span className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${user.isOnService ? 'bg-emerald-400' : 'bg-slate-400'}`} />{user.isOnService ? 'In servizio' : 'Fuori servizio'}</span>
-                </div>
+                <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-start"><h3 className="max-w-full truncate text-2xl font-bold text-slate-900">{user.name}</h3><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${roleMeta.className}`}>{roleMeta.icon}{roleMeta.label}</span></div>
+                <div className="mt-2 flex flex-col gap-1.5 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-4"><span className="inline-flex min-w-0 items-center justify-center gap-1.5 sm:justify-start"><Mail className="h-4 w-4 shrink-0 text-slate-400" /><span className="truncate">{user.email}</span></span><span className="inline-flex items-center justify-center gap-1.5 sm:justify-start"><span className={`h-2 w-2 rounded-full ${user.isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />{user.isOnService ? 'In servizio' : 'Fuori servizio'}</span></div>
               </div>
             </div>
           </div>
 
-          <div className="relative border-t border-white/10 px-3 pt-2 sm:px-8 sm:pt-3">
-            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/5 p-1 sm:flex sm:w-fit">
-              <button
-                type="button"
-                onClick={() => setActiveTab('profile')}
-                className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition sm:min-w-40 sm:text-sm ${activeTab === 'profile' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}
-              >
-                <User className="h-4 w-4" />
-                Profilo
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('security')}
-                className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition sm:min-w-40 sm:text-sm ${activeTab === 'security' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}
-              >
-                <LockKeyhole className="h-4 w-4" />
-                Sicurezza
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8">
+          <form onSubmit={handleSubmit} className="p-5 sm:p-8">
             {activeTab === 'profile' ? (
-              <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-                <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                  <div className="mb-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">Immagine</p>
-                    <h4 className="mt-1 text-lg font-bold text-slate-900">La tua identità</h4>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Personalizza il profilo visibile nel concessionario.</p>
-                  </div>
-
-                  <div className="flex flex-col items-center rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50 p-6 text-center">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-600">Immagine</p>
+                  <h4 className="mt-1 text-lg font-bold text-slate-900">Foto profilo</h4>
+                  <div className="mt-5 flex flex-col items-center text-center">
                     <AvatarUpload currentAvatarUrl={currentAvatarUrl} onAvatarUpdate={handleAvatarUpdate} size="md" />
-                    <p className="mt-4 text-sm font-semibold text-slate-800">Immagine profilo</p>
-                    <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">JPG, PNG, GIF o WEBP. Le immagini grandi vengono compresse automaticamente.</p>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Ruolo</p>
-                      <p className="mt-1 text-sm font-bold text-slate-800">{roleMeta.label}</p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Servizio</p>
-                      <p className={`mt-1 text-sm font-bold ${user.isOnService ? 'text-emerald-700' : 'text-slate-700'}`}>{user.isOnService ? 'Attivo' : 'Non attivo'}</p>
-                    </div>
+                    <p className="mt-4 max-w-xs text-xs leading-5 text-slate-500">Usa JPG, PNG, GIF o WEBP. Le immagini grandi vengono compresse automaticamente.</p>
                   </div>
                 </section>
 
-                <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                  <div className="mb-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">Account</p>
-                    <h4 className="mt-1 text-lg font-bold text-slate-900">Informazioni personali</h4>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Aggiorna i dati con cui il team ti identifica.</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Nome completo</label>
-                      <div className="relative">
-                        <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <input required value={formData.name} onChange={event => setFormData(previous => ({ ...previous, name: event.target.value }))} className={inputClass} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <input required type="email" value={formData.email} onChange={event => setFormData(previous => ({ ...previous, email: event.target.value }))} className={inputClass} />
-                      </div>
-                    </div>
-
-                    <div className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-4 sm:p-5">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">Disponibilità</p>
-                          <p className="text-xs text-slate-500">Come sei normalmente disponibile per il team.</p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-amber-500" />
-                      </div>
-                      <AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} />
-                    </div>
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-600">Account</p>
+                  <h4 className="mt-1 text-lg font-bold text-slate-900">Informazioni personali</h4>
+                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="block sm:col-span-1"><span className="mb-2 block text-sm font-semibold text-slate-700">Nome completo</span><div className="relative"><User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required value={formData.name} onChange={event => setFormData(previous => ({ ...previous, name: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
+                    <label className="block sm:col-span-1"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required type="email" value={formData.email} onChange={event => setFormData(previous => ({ ...previous, email: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
+                    <div className="sm:col-span-2"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} /></div>
                   </div>
                 </section>
               </div>
             ) : (
-              <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-                <section className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-slate-50 p-5 shadow-sm sm:p-6">
-                  <div className="flex h-full flex-col justify-between">
-                    <div>
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><ShieldCheck className="h-5 w-5" /></div>
-                      <p className="mt-5 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Protezione</p>
-                      <h4 className="mt-1 text-xl font-bold text-slate-900">Sicurezza account</h4>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">Aggiorna la password e mantieni protetto il tuo accesso.</p>
-                    </div>
-                    <div className="mt-8 rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-                      <p className="text-xs font-bold text-emerald-800">Consiglio</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">Usa una password che non riutilizzi su altri servizi.</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                  <div className="mb-5 flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700"><KeyRound className="h-5 w-5" /></div>
-                    <div>
-                      <h4 className="text-lg font-bold text-slate-900">Cambia password</h4>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">Inserisci la password attuale e scegli quella nuova.</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => (
-                      <div key={field}>
-                        <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
-                        <div className="relative">
-                          <Icon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                          <input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className={`${inputClass} pr-12 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100`} />
-                          <button type="button" onClick={() => toggle(value => !value)} aria-label={visible ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`} className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:text-slate-700">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
+              <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><ShieldCheck className="h-5 w-5" /></div><div><p className="text-sm font-bold text-emerald-900">Sicurezza account</p><p className="mt-1 text-xs leading-5 text-emerald-700">Aggiorna la password solo quando necessario. Inserisci sempre la password attuale.</p></div></div>
+                <div className="mt-6 space-y-4">
+                  {passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => <label key={field} className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span><div className="relative"><Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /><button type="button" onClick={() => toggle(value => !value)} aria-label={visible ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`} className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400 hover:text-slate-700">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>)}
+                </div>
+              </section>
             )}
-          </div>
 
-          <div className="shrink-0 border-t border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-4 lg:px-8">
-            <div className="mx-auto flex w-full max-w-5xl flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" onClick={handleClose} className="min-h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 active:scale-[0.99] sm:min-w-36">Annulla</button>
-              <button type="submit" disabled={isLoading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-sm font-bold text-white shadow-[0_10px_25px_rgba(245,158,11,0.22)] transition hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-48">
+            <div className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:flex-row sm:justify-end sm:px-8">
+              <button type="button" onClick={handleClose} className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 active:scale-[0.99] sm:min-w-32">Chiudi</button>
+              <button type="submit" disabled={isLoading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(245,158,11,0.22)] transition hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44">
                 {isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Save className="h-4 w-4" />}
                 {isLoading ? 'Salvataggio...' : 'Salva modifiche'}
               </button>
             </div>
-          </div>
-        </form>
+          </form>
+        </main>
       </div>
     </div>,
     document.body,
