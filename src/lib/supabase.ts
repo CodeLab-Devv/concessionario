@@ -93,27 +93,36 @@ export type Database = {
       activity_logs: {
         Row: {
           id: string
-          user_id: string
+          user_id: string | null
           action: string
           details: string
           target_user_id: string | null
-          timestamp: string
+          created_at: string
+          table_name: string | null
+          record_id: string | null
+          metadata: Record<string, unknown> | null
         }
         Insert: {
           id?: string
-          user_id: string
+          user_id?: string | null
           action: string
           details: string
-          target_user_id?: string
-          timestamp?: string
+          target_user_id?: string | null
+          created_at?: string
+          table_name?: string | null
+          record_id?: string | null
+          metadata?: Record<string, unknown> | null
         }
         Update: {
           id?: string
-          user_id?: string
+          user_id?: string | null
           action?: string
           details?: string
-          target_user_id?: string
-          timestamp?: string
+          target_user_id?: string | null
+          created_at?: string
+          table_name?: string | null
+          record_id?: string | null
+          metadata?: Record<string, unknown> | null
         }
       }
     }
