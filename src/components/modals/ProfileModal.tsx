@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../ui/NotificationManager';
@@ -9,7 +9,6 @@ import { AvailabilityEditor } from '../AvailabilityEditor';
 import {
   Award,
   CheckCircle2,
-  ChevronRight,
   Crown,
   Eye,
   EyeOff,
@@ -279,37 +278,36 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-600">Immagine</p>
                   <h4 className="mt-1 text-lg font-bold text-slate-900">Foto profilo</h4>
-                  <div className="mt-5 flex flex-col items-center text-center">
-                    <AvatarUpload currentAvatarUrl={currentAvatarUrl} onAvatarUpdate={handleAvatarUpdate} size="md" />
-                    <p className="mt-4 max-w-xs text-xs leading-5 text-slate-500">Usa JPG, PNG, GIF o WEBP. Le immagini grandi vengono compresse automaticamente.</p>
-                  </div>
+                  <div className="mt-5 flex flex-col items-center text-center"><AvatarUpload currentAvatarUrl={currentAvatarUrl} onAvatarUpdate={handleAvatarUpdate} size="md" /><p className="mt-4 max-w-xs text-xs leading-5 text-slate-500">Usa JPG, PNG, GIF o WEBP. Le immagini grandi vengono compresse automaticamente.</p></div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-600">Account</p>
                   <h4 className="mt-1 text-lg font-bold text-slate-900">Informazioni personali</h4>
                   <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <label className="block sm:col-span-1"><span className="mb-2 block text-sm font-semibold text-slate-700">Nome completo</span><div className="relative"><User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required value={formData.name} onChange={event => setFormData(previous => ({ ...previous, name: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
-                    <label className="block sm:col-span-1"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required type="email" value={formData.email} onChange={event => setFormData(previous => ({ ...previous, email: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
-                    <div className="sm:col-span-2"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} /></div>
+                    <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Nome completo</span><div className="relative"><User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required value={formData.name} onChange={event => setFormData(previous => ({ ...previous, name: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
+                    <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required type="email" value={formData.email} onChange={event => setFormData(previous => ({ ...previous, email: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
                   </div>
+
+                  <div className="mt-4 rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-4"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} /></div>
                 </section>
               </div>
             ) : (
-              <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-                <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><ShieldCheck className="h-5 w-5" /></div><div><p className="text-sm font-bold text-emerald-900">Sicurezza account</p><p className="mt-1 text-xs leading-5 text-emerald-700">Aggiorna la password solo quando necessario. Inserisci sempre la password attuale.</p></div></div>
-                <div className="mt-6 space-y-4">
-                  {passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => <label key={field} className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span><div className="relative"><Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /><button type="button" onClick={() => toggle(value => !value)} aria-label={visible ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`} className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400 hover:text-slate-700">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>)}
+              <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600">Protezione</p>
+                <h4 className="mt-1 text-lg font-bold text-slate-900">Sicurezza account</h4>
+                <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><ShieldCheck className="h-4 w-4" /></div><div><p className="text-sm font-semibold text-emerald-900">Account protetto</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Per cambiare password inserisci prima quella attuale.</p></div></div></div>
+                <div className="mt-5 space-y-4">
+                  {passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => (
+                    <div key={field}><label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label><div className="relative"><Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /><button type="button" onClick={() => toggle(value => !value)} aria-label={visible ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`} className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400 transition hover:text-slate-700">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  ))}
                 </div>
               </section>
             )}
 
-            <div className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:flex-row sm:justify-end sm:px-8">
-              <button type="button" onClick={handleClose} className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 active:scale-[0.99] sm:min-w-32">Chiudi</button>
-              <button type="submit" disabled={isLoading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(245,158,11,0.22)] transition hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44">
-                {isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Save className="h-4 w-4" />}
-                {isLoading ? 'Salvataggio...' : 'Salva modifiche'}
-              </button>
+            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={handleClose} className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.99] sm:min-w-36">Annulla</button>
+              <button type="submit" disabled={isLoading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(245,158,11,0.22)] transition hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44">{isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Save className="h-4 w-4" />}{isLoading ? 'Salvataggio...' : 'Salva modifiche'}</button>
             </div>
           </form>
         </main>
