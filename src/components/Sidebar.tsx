@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   Activity,
@@ -6,11 +6,17 @@ import {
   ChevronLeft,
   DollarSign,
   LayoutDashboard,
+  LogOut,
   Megaphone,
+  Settings,
   Users,
   X,
+  Circle,
+  CircleDot,
 } from 'lucide-react';
 import { useServiceStatus } from '../hooks/useServiceStatus';
+import { ProfileModal } from './modals/ProfileModal';
+import { Avatar } from './Avatar';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -33,8 +39,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentPage,
   onPageChange,
 }) => {
-  const { user } = useAuth();
+  const { user, logout, toggleServiceStatus } = useAuth();
   const isOnService = useServiceStatus(user);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isServiceLoading, setIsServiceLoading] = useState(false);
+
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
   const canAccessActivity = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
   const canAccessAnnouncements = isOnService;
@@ -83,8 +92,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : []),
   ];
 
-  const handlePageChange = (page: SidebarProps['currentPage']) => {
-    onPageChange(page);
+  const handlePageChange = (page: SidebarProps['currentPage']) => onPageChange(page);
+
+  const handleToggleServiceStatus = async () => {
+    if (!toggleServiceStatus || isServiceLoading) return;
+    setIsServiceLoading(true);
+    try {
+      await toggleServiceStatus();
+    } catch (error) {
+      console.error('Errore cambio stato servizio:', error);
+    } finally {
+      setIsServiceLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    onToggle();
   };
 
   return (
@@ -109,17 +133,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className={`flex min-w-0 items-center ${isOpen ? 'gap-3' : ''}`}>
               <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 shadow-[0_8px_22px_rgba(245,158,11,0.28)] ring-4 ring-amber-50">
                 <Users className="h-5 w-5 text-white" strokeWidth={2.2} />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               </div>
 
               {isOpen && (
                 <div className="min-w-0">
-                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">
-                    Concessionario
-                  </p>
-                  <h1 className="truncate text-[17px] font-bold tracking-tight text-slate-900">
-                    Aurum Motors
-                  </h1>
+                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">Concessionario</p>
+                  <h1 className="truncate text-[17px] font-bold tracking-tight text-slate-900">Aurum Motors</h1>
                 </div>
               )}
             </div>
@@ -136,57 +156,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {isOpen && user && (
-            <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm">
-              <div className="flex items-center gap-3">
-                {user.avatar_url ? (
-                  <img
-                    src={user.avatar_url}
-                    alt=""
-                    className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600 ring-1 ring-slate-200">
-                    {user.name?.slice(0, 1).toUpperCase() || '?'}
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {user.name || 'Utente'}
-                  </p>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <span className="truncate text-[11px] font-medium text-slate-500">
-                      {ROLE_LABELS[user.role || ''] || user.role || 'Utente'}
-                    </span>
-                    {isOnService && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        In servizio
-                      </span>
-                    )}
-                  </div>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99]"
+              >
+                <div className="relative shrink-0">
+                  <Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} />
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                 </div>
-              </div>
-            </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-900">{user.name || 'Utente'}</p>
+                  <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">{ROLE_LABELS[user.role || ''] || user.role || 'Utente'}</p>
+                </div>
+                <Settings className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-amber-600" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleToggleServiceStatus()}
+                disabled={isServiceLoading}
+                className={`mt-3 flex min-h-12 w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-70 ${
+                  isOnService
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-200 hover:bg-amber-50'
+                }`}
+              >
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isOnService ? 'bg-white text-emerald-600' : 'bg-white text-slate-500'}`}>
+                  {isOnService ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{isOnService ? 'In servizio' : 'Fuori servizio'}</span>
+                  <span className="mt-0.5 block text-[10px] font-medium opacity-70">{isOnService ? 'Clicca per uscire dal servizio' : 'Clicca per entrare in servizio'}</span>
+                </span>
+                {isServiceLoading && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+              </button>
+            </>
           )}
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4" aria-label="Navigazione principale">
           <div className="mb-3 flex items-center justify-between px-2">
-            {isOpen ? (
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                Menu principale
-              </span>
-            ) : (
-              <span className="mx-auto h-1.5 w-1.5 rounded-full bg-slate-300" />
-            )}
+            {isOpen ? <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Menu principale</span> : <span className="mx-auto h-1.5 w-1.5 rounded-full bg-slate-300" />}
           </div>
 
           <div className="space-y-1.5">
-            {menuItems.map((item) => {
+            {menuItems.map(item => {
               const Icon = item.icon;
               const active = currentPage === item.page;
-
               return (
                 <button
                   key={item.id}
@@ -194,42 +212,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handlePageChange(item.page)}
                   aria-current={active ? 'page' : undefined}
                   title={!isOpen ? item.label : undefined}
-                  className={`group relative flex min-h-12 w-full items-center rounded-2xl text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99] ${
-                    isOpen ? 'gap-3 px-3' : 'justify-center px-2'
-                  } ${
-                    active
-                      ? 'bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 text-white shadow-[0_8px_24px_rgba(245,158,11,0.22)]'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`group relative flex min-h-12 w-full items-center rounded-2xl text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99] ${isOpen ? 'gap-3 px-3' : 'justify-center px-2'} ${active ? 'bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 text-white shadow-[0_8px_24px_rgba(245,158,11,0.22)]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                 >
-                  {active && (
-                    <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-white/90" />
-                  )}
-
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${
-                      active
-                        ? 'bg-white/15 text-white ring-1 ring-white/15'
-                        : 'bg-slate-100/80 text-slate-500 group-hover:bg-white group-hover:text-amber-600 group-hover:shadow-sm'
-                    }`}
-                  >
+                  {active && <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-white/90" />}
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${active ? 'bg-white/15 text-white ring-1 ring-white/15' : 'bg-slate-100/80 text-slate-500 group-hover:bg-white group-hover:text-amber-600 group-hover:shadow-sm'}`}>
                     <Icon className="h-[19px] w-[19px]" strokeWidth={2.1} />
                   </span>
-
-                  {isOpen && (
-                    <span className="min-w-0 flex-1 py-0.5">
-                      <span className={`block truncate text-sm font-semibold ${active ? 'text-white' : 'text-slate-800'}`}>
-                        {item.label}
-                      </span>
-                      <span className={`mt-0.5 block truncate text-[10px] font-medium ${active ? 'text-white/75' : 'text-slate-400'}`}>
-                        {item.description}
-                      </span>
-                    </span>
-                  )}
-
-                  {isOpen && active && (
-                    <ChevronLeft className="h-4 w-4 rotate-180 text-white/80" />
-                  )}
+                  {isOpen && <span className="min-w-0 flex-1 py-0.5"><span className={`block truncate text-sm font-semibold ${active ? 'text-white' : 'text-slate-800'}`}>{item.label}</span><span className={`mt-0.5 block truncate text-[10px] font-medium ${active ? 'text-white/75' : 'text-slate-400'}`}>{item.description}</span></span>}
+                  {isOpen && active && <ChevronLeft className="h-4 w-4 rotate-180 text-white/80" />}
                 </button>
               );
             })}
@@ -238,31 +228,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="safe-area-bottom border-t border-slate-200/80 bg-slate-50/70 p-3 sm:p-4">
           {isOpen ? (
-            <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-3.5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm">
-                  <Activity className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900">Stato operativo</p>
-                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                    {isOnService ? 'Sei attualmente in servizio.' : 'Non sei attualmente in servizio.'}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-red-100 bg-white px-3 text-left text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 active:scale-[0.99]"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50"><LogOut className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">Esci</span><span className="block text-[10px] font-medium text-red-400">Disconnetti l'account</span></span>
+            </button>
           ) : (
-            <div
-              className={`mx-auto h-3 w-3 rounded-full ring-4 ${
-                isOnService
-                  ? 'bg-emerald-500 ring-emerald-50'
-                  : 'bg-slate-300 ring-slate-100'
-              }`}
-              title={isOnService ? 'In servizio' : 'Fuori servizio'}
-            />
+            <button type="button" onClick={() => void handleToggleServiceStatus()} disabled={isServiceLoading} title={isOnService ? 'Fuori servizio' : 'In servizio'} className={`mx-auto flex h-10 w-10 items-center justify-center rounded-xl ${isOnService ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+              {isOnService ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+            </button>
           )}
         </div>
       </aside>
+
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </>
   );
 };
