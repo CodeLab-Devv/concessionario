@@ -266,6 +266,10 @@ export const Dashboard: React.FC = () => {
       );
     };
 
+    const mapSaleRow=(row:Record<string,any>):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:row.type,category:row.category,created_at:row.created_at||new Date().toISOString()});
+    const handleDashboardSalesRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};setSales(current=>{if(eventType==='INSERT'&&nextRow){const row=mapSaleRow(nextRow);return current.some(item=>item.id===row.id)?current:[row,...current];}if(eventType==='UPDATE'&&nextRow){const row=mapSaleRow(nextRow);return current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?row:item):[row,...current];}if(eventType==='DELETE'&&oldRow?.id)return current.filter(item=>item.id!==String(oldRow.id));return current;});};
+    const handleDashboardUserRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};if(eventType==='DELETE'&&oldRow?.id){setEmployees(current=>current.filter(employee=>employee.id!==String(oldRow.id)));return;}if(!nextRow?.id||String(nextRow.id)===String(user?.id))return;setEmployees(current=>{const existing=current.find(employee=>employee.id===String(nextRow.id));const mapped:Employee={id:String(nextRow.id),name:String(nextRow.name||''),email:String(nextRow.email||''),role:nextRow.role,employeeType:nextRow.employee_type||undefined,department:'Concessionario',hireDate:String(nextRow.created_at||'').split('T')[0],totalSales:existing?.totalSales||0,isOnService:Boolean(nextRow.is_on_service),lastServiceStatusChange:nextRow.last_service_status_change||undefined,avatar_url:nextRow.avatar_url||undefined};return existing?current.map(employee=>employee.id===mapped.id?mapped:employee):[...current,mapped];});};
+
     const handleServiceStatusChange = (event: CustomEvent) => {
       const { userId, userName, newStatus, timestamp } = event.detail;
       
@@ -293,21 +297,19 @@ export const Dashboard: React.FC = () => {
     };
 
     window.addEventListener('employeeStatusUpdated', handleEmployeeStatusUpdate as EventListener);
+    window.addEventListener('dashboardSalesRealtimeChange', handleDashboardSalesRealtime as EventListener);
+    window.addEventListener('dashboardUserRealtimeChange', handleDashboardUserRealtime as EventListener);
     window.addEventListener('employeeServiceStatusChanged', handleServiceStatusChange as EventListener);
 
     return () => {
       window.removeEventListener('employeeStatusUpdated', handleEmployeeStatusUpdate as EventListener);
+      window.removeEventListener('dashboardSalesRealtimeChange', handleDashboardSalesRealtime as EventListener);
+      window.removeEventListener('dashboardUserRealtimeChange', handleDashboardUserRealtime as EventListener);
       window.removeEventListener('employeeServiceStatusChanged', handleServiceStatusChange as EventListener);
     };
   }, [user, fetchData, fetchEmployeesStatus]);
 
-  // Real-time subscription integration
-  useDashboardRealtime({
-    refreshSales: fetchSales,
-    refreshEmployees: fetchEmployees,
-    userRole: user?.role,
-    enabled: !!user
-  });
+  useDashboardRealtime({userRole:user?.role,enabled:!!user});
 
   const { userSales, totalRevenue, permissions } = useMemo(() => {
     const isManager = ['owner', 'director', 'vice_director'].includes(user?.role || '');
@@ -367,8 +369,6 @@ export const Dashboard: React.FC = () => {
           p_target_user_id: sale.employeeId
         });
       }
-
-      await fetchSales();
     } catch (error) {
       console.error('Error adding sale:', error);
     }
@@ -401,8 +401,6 @@ export const Dashboard: React.FC = () => {
           p_target_user_id: updatedSale.employeeId
         });
       }
-
-      await fetchSales();
     } catch (error) {
       console.error('Error updating sale:', error);
     }

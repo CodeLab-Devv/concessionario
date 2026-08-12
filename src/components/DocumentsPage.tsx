@@ -274,30 +274,10 @@ export const DocumentsPage: React.FC = () => {
 
 
 
-  // Callback stabili per la sottoscrizione real-time
-  const handleRealtimeInsert = useCallback((payload: RealtimePayload) => {
-    console.log('Document inserted:', payload);
-    fetchDocuments(true, true); // Forza refresh con indicatore real-time
-  }, [fetchDocuments]);
+  const upsertDocumentRealtime=useCallback(async(payload:RealtimePayload)=>{const raw=payload.new as Document&{vehicle_id?:number|null};if(!raw?.id)return;let vehicle_name=raw.vehicle_name??null;let vehicle_type=raw.vehicle_type??null;if(raw.vehicle_id!=null){const {data:vehicle}=await supabase.from('vehicles').select('name,type').eq('id',raw.vehicle_id).maybeSingle();vehicle_name=vehicle?.name??vehicle_name;vehicle_type=vehicle?.type??vehicle_type;}const row:Document={...raw,vehicle_name,vehicle_type};setDocuments(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?{...item,...row}:item):[row,...current]);documentsCacheRef.current=documentsCacheRef.current.some(item=>item.id===row.id)?documentsCacheRef.current.map(item=>item.id===row.id?{...item,...row}:item):[row,...documentsCacheRef.current];},[]);
+  const handleRealtimeDelete=useCallback((payload:RealtimePayload)=>{const id=(payload.old as {id?:string}).id;if(!id)return;setDocuments(current=>current.filter(item=>item.id!==id));documentsCacheRef.current=documentsCacheRef.current.filter(item=>item.id!==id);},[]);
+  useRealtimeSubscription({table:'documents',enabled:hasAccess,onInsert:upsertDocumentRealtime,onUpdate:upsertDocumentRealtime,onDelete:handleRealtimeDelete});
 
-  const handleRealtimeUpdate = useCallback((payload: RealtimePayload) => {
-    console.log('Document updated:', payload);
-    fetchDocuments(true, true); // Forza refresh con indicatore real-time
-  }, [fetchDocuments]);
-
-  const handleRealtimeDelete = useCallback((payload: RealtimePayload) => {
-    console.log('Document deleted:', payload);
-    fetchDocuments(true, true); // Forza refresh con indicatore real-time
-  }, [fetchDocuments]);
-
-  // Real-time subscription for documents
-  useRealtimeSubscription({
-    table: 'documents',
-    enabled: hasAccess,
-    onInsert: handleRealtimeInsert,
-    onUpdate: handleRealtimeUpdate,
-    onDelete: handleRealtimeDelete
-  });
 
   useEffect(() => {
     if (hasAccess) {
