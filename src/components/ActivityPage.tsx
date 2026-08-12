@@ -11,6 +11,13 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+
+type RealtimeRow = Record<string, unknown> & {
+  id?: string; employee_id?: string; employee_name?: string; item_name?: string;
+  car_model?: string; price?: number | string; quantity?: number | string; total?: number | string;
+  date?: string; type?: string; category?: string; discount_type?: string; created_at?: string;
+};
+
 import { Sale, User } from '../types';
 
 interface SaleRow {
@@ -126,7 +133,7 @@ export const ActivityPage: React.FC = () => {
     void load();
   }, [load]);
 
-  useEffect(()=>{if(!isHighRank||!isOnService)return;const toSale=(row:Record<string,any>):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:'sale',category:'concessionari',discountType:row.discount_type??undefined,created_at:row.created_at||new Date().toISOString()});const channel=supabase.channel('activity-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as Record<string,any>);setSales(current=>current.some(item=>item.id===row.id)?current:[row,...current]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as Record<string,any>);setSales(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?row:item):[row,...current]);}).on('postgres_changes',{event:'DELETE',schema:'public',table:'sales'},payload=>{const id=(payload.old as {id?:string}).id;if(id)setSales(current=>current.filter(item=>item.id!==id));}).on('postgres_changes',{event:'*',schema:'public',table:'users'},payload=>{const row=(payload.new||payload.old) as Record<string,any>;if(!row?.id)return;if(payload.eventType==='DELETE'){setUsers(current=>current.filter(item=>item.id!==row.id));return;}const mapped=row as User;setUsers(current=>current.some(item=>item.id===mapped.id)?current.map(item=>item.id===mapped.id?{...item,...mapped}:item):[...current,mapped]);}).subscribe();return()=>{void supabase.removeChannel(channel);};},[isHighRank,isOnService]);
+  useEffect(()=>{if(!isHighRank||!isOnService)return;const toSale=(row:RealtimeRow):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:'sale',category:'concessionari',discountType:row.discount_type??undefined,created_at:row.created_at||new Date().toISOString()});const channel=supabase.channel('activity-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as RealtimeRow);setSales(current=>current.some(item=>item.id===row.id)?current:[row,...current]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as RealtimeRow);setSales(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?row:item):[row,...current]);}).on('postgres_changes',{event:'DELETE',schema:'public',table:'sales'},payload=>{const id=(payload.old as {id?:string}).id;if(id)setSales(current=>current.filter(item=>item.id!==id));}).on('postgres_changes',{event:'*',schema:'public',table:'users'},payload=>{const row=(payload.new||payload.old) as RealtimeRow;if(!row?.id)return;if(payload.eventType==='DELETE'){setUsers(current=>current.filter(item=>item.id!==row.id));return;}const mapped=row as User;setUsers(current=>current.some(item=>item.id===mapped.id)?current.map(item=>item.id===mapped.id?{...item,...mapped}:item):[...current,mapped]);}).subscribe();return()=>{void supabase.removeChannel(channel);};},[isHighRank,isOnService]);
 
   const filtered = useMemo(() => {
     const now = new Date();

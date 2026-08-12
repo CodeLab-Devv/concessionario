@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+
+type AdminRealtimeRow = Record<string, unknown> & {
+  id?: string; name?: string; email?: string; role?: string; employee_id?: string; total?: number | string; availability?: unknown;
+};
+
 import { supabase } from '../lib/supabase';
-import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
+import { useRealtimeSubscription, type RealtimePayload } from '../hooks/useRealtimeSubscription';
 import { useDialogs } from './ui/DialogManager';
 import {
   DollarSign,
@@ -141,8 +146,8 @@ export const AdminPage: React.FC = () => {
     void fetchEmployeesRevenue();
   }, [fetchEmployeesRevenue]);
 
-  const handleUsersRealtimeChange=useCallback((payload:any)=>{const row=(payload.new||payload.old) as Record<string,any>;if(!row?.id)return;setEmployees(current=>{if(payload.eventType==='DELETE')return current.filter(item=>item.id!==row.id);const next:EmployeeRevenue={id:String(row.id),name:String(row.name||''),email:String(row.email||''),role:row.role,revenue:0,commission:getDefaultCommission(row.role),availability:(row.availability&&typeof row.availability==='object'?row.availability:{}) as Availability};const existing=current.find(item=>item.id===next.id);return existing?current.map(item=>item.id===next.id?{...item,...next,revenue:item.revenue}:item):[...current,next];});},[]);
-  const handleSalesRealtimeChange=useCallback((payload:any)=>{const n=payload.new as Record<string,any>|null;const o=payload.old as Record<string,any>|null;const ni=n?.employee_id?String(n.employee_id):null;const oi=o?.employee_id?String(o.employee_id):null;const nt=Number(n?.total)||0;const ot=Number(o?.total)||0;setEmployees(current=>current.map(employee=>{let d=0;if(payload.eventType==='INSERT'&&employee.id===ni)d=nt;if(payload.eventType==='DELETE'&&employee.id===oi)d=-ot;if(payload.eventType==='UPDATE'){if(employee.id===oi)d-=ot;if(employee.id===ni)d+=nt;}return d?{...employee,revenue:Math.max(0,employee.revenue+d)}:employee;}));},[]);
+  const handleUsersRealtimeChange=useCallback((payload: RealtimePayload)=>{const row=(payload.new||payload.old) as AdminRealtimeRow;if(!row?.id)return;setEmployees(current=>{if(payload.eventType==='DELETE')return current.filter(item=>item.id!==row.id);const next:EmployeeRevenue={id:String(row.id),name:String(row.name||''),email:String(row.email||''),role:row.role ?? '',revenue:0,commission:getDefaultCommission(row.role ?? ''),availability:(row.availability&&typeof row.availability==='object'?row.availability:{}) as Availability};const existing=current.find(item=>item.id===next.id);return existing?current.map(item=>item.id===next.id?{...item,...next,revenue:item.revenue}:item):[...current,next];});},[]);
+  const handleSalesRealtimeChange=useCallback((payload: RealtimePayload)=>{const n=payload.new as AdminRealtimeRow|null;const o=payload.old as AdminRealtimeRow|null;const ni=n?.employee_id?String(n.employee_id):null;const oi=o?.employee_id?String(o.employee_id):null;const nt=Number(n?.total)||0;const ot=Number(o?.total)||0;setEmployees(current=>current.map(employee=>{let d=0;if(payload.eventType==='INSERT'&&employee.id===ni)d=nt;if(payload.eventType==='DELETE'&&employee.id===oi)d=-ot;if(payload.eventType==='UPDATE'){if(employee.id===oi)d-=ot;if(employee.id===ni)d+=nt;}return d?{...employee,revenue:Math.max(0,employee.revenue+d)}:employee;}));},[]);
   useRealtimeSubscription({table:'users',onInsert:handleUsersRealtimeChange,onUpdate:handleUsersRealtimeChange,onDelete:handleUsersRealtimeChange,enabled:hasAdminAccess});
   useRealtimeSubscription({table:'sales',onInsert:handleSalesRealtimeChange,onUpdate:handleSalesRealtimeChange,onDelete:handleSalesRealtimeChange,enabled:hasAdminAccess});
 
