@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Activity, CalendarDays, ChevronLeft, DollarSign, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
+import { Activity, CalendarDays, ChevronLeft, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
 import { useServiceStatus } from '../hooks/useServiceStatus';
 import { ProfileModal } from './modals/ProfileModal';
 import { Avatar } from './Avatar';
@@ -28,7 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const roleMeta = ROLE_META[user?.role || ''] ?? { label: 'Utente', className: 'border-slate-200 bg-slate-50 text-slate-600' };
-  const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
   const canAccessActivity = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
   const canAccessAnnouncements = isOnService;
 
@@ -37,7 +36,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
     ...(canAccessActivity ? [{ id: 'activity', label: 'Attività', description: 'Registro operativo', icon: Activity, page: 'activity' as const }] : []),
     { id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const },
     ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', description: 'Comunicazioni del team', icon: Megaphone, page: 'announcements' as const }] : []),
-    ...(canAccessAdmin ? [{ id: 'admin', label: 'Stipendi', description: 'Compensi e gestione', icon: DollarSign, page: 'admin' as const }] : []),
   ];
 
   const handleLogout = async () => {
@@ -72,14 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
     <aside className={`safe-area-bottom app-viewport-height fixed inset-y-0 left-0 z-50 flex w-[min(88vw,21rem)] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-[10px_0_40px_rgba(15,23,42,0.10)] transition-[transform,width,box-shadow] duration-300 ease-out lg:relative lg:shadow-none ${isOpen ? 'translate-x-0 lg:w-[18.5rem]' : '-translate-x-full lg:w-[5.5rem] lg:translate-x-0'}`}>
       <div className="safe-area-top border-b border-slate-200/80 bg-gradient-to-b from-white to-slate-50/80 px-3 pb-3 pt-3 sm:px-4">
         <div className={`flex items-center ${isOpen ? 'justify-start' : 'justify-center'}`}>
-          <img
-            src={isOpen ? '/aurum-motors-logo.svg' : '/aurum-motors-mark.svg'}
-            alt="Aurum Motors"
-            className={isOpen ? 'h-11 w-auto max-w-[14rem]' : 'h-11 w-11'}
-            draggable={false}
-          />
+          <img src={isOpen ? '/aurum-motors-logo.svg' : '/aurum-motors-mark.svg'} alt="Aurum Motors" className={isOpen ? 'h-11 w-auto max-w-[14rem]' : 'h-11 w-11'} draggable={false} />
         </div>
-
         {isOpen && user && (
           <button type="button" onClick={() => setShowProfileModal(true)} className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99]">
             <div className="relative shrink-0"><Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} /><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} /></div>
@@ -88,7 +80,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
           </button>
         )}
       </div>
-
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4" aria-label="Navigazione principale">
         {isOpen && <div className="mb-3 px-2"><span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Menu principale</span></div>}
         <div className="space-y-1.5">
@@ -104,7 +95,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
           })}
         </div>
       </nav>
-
       <div className="safe-area-bottom border-t border-slate-200/80 bg-slate-50/70 p-3 sm:p-4">
         {isOpen ? (
           <button type="button" onClick={() => void handleLogout()} disabled={isLoggingOut} className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-red-100 bg-white px-3 text-left text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70">
@@ -117,7 +107,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
           </button>
         )}
       </div>
-
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </aside>
   );
