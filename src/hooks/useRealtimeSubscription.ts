@@ -34,10 +34,46 @@ export const useRealtimeSubscription = ({
     if (!enabled) return;
 
     let isMounted = true;
-
     const filterKey = filter ? encodeURIComponent(filter) : 'none';
     const channelName = `realtime-${table}-${filterKey}`;
-    
+
+    const dispatch = async (payload: RealtimePayload) => {
+      if (!isMounted) return;
+
+      let enrichedPayload = payload;
+      if (table === 'announcements' && payload.eventType !== 'DELETE') {
+        const row = payload.new as Record<string, unknown>;
+        const authorId = typeof row.author_id === 'string' ? row.author_id : null;
+        if (authorId) {
+          const { data: author } = await supabase
+            .from('users')
+            .select('id,name,avatar_url,role')
+            .eq('id', authorId)
+            .maybeSingle();
+
+          if (author && isMounted) {
+            enrichedPayload = {
+              ...payload,
+              new: { ...row, author }
+            } as RealtimePayload;
+          }
+        }
+      }
+
+      if (!isMounted) return;
+      switch (enrichedPayload.eventType) {
+        case 'INSERT':
+          onInsertRef.current?.(enrichedPayload);
+          break;
+        case 'UPDATE':
+          onUpdateRef.current?.(enrichedPayload);
+          break;
+        case 'DELETE':
+          onDeleteRef.current?.(enrichedPayload);
+          break;
+      }
+    };
+
     const channel = supabase
       .channel(channelName)
       .on(
@@ -49,19 +85,7 @@ export const useRealtimeSubscription = ({
           ...(filter && { filter })
         },
         (payload: RealtimePayload) => {
-          if (!isMounted) return;
-          
-          switch (payload.eventType) {
-            case 'INSERT':
-              onInsertRef.current?.(payload);
-              break;
-            case 'UPDATE':
-              onUpdateRef.current?.(payload);
-              break;
-            case 'DELETE':
-              onDeleteRef.current?.(payload);
-              break;
-          }
+          void dispatch(payload);
         }
       )
       .subscribe();
