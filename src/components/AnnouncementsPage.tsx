@@ -42,8 +42,20 @@ export const AnnouncementsPage: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => { void loadAnnouncements(); }, [loadAnnouncements]);
-  useRealtimeSubscription({ table: 'announcements', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });
-  useRealtimeSubscription({ table: 'announcement_reads', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });
+  useRealtimeSubscription({
+    table: 'announcements',
+    onInsert: payload => { const row = payload.new as Announcement; setAnnouncements(current => current.some(item => item.id === row.id) ? current : [{ ...row, read: row.author_id === user?.id }, ...current]); },
+    onUpdate: payload => { const row = payload.new as Announcement; setAnnouncements(current => current.map(item => item.id === row.id ? { ...item, ...row, author: item.author, read: item.author_id === user?.id || item.read } : item)); setSelected(current => current?.id === row.id ? { ...current, ...row } : current); },
+    onDelete: payload => { const id = (payload.old as { id?: string }).id; if (!id) return; setAnnouncements(current => current.filter(item => item.id !== id)); setSelected(current => current?.id === id ? null : current); },
+    enabled: Boolean(user?.id),
+  });
+  useRealtimeSubscription({
+    table: 'announcement_reads',
+    onInsert: payload => { const row = payload.new as { announcement_id?: string; user_id?: string }; if (row.user_id !== user?.id || !row.announcement_id) return; setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: true } : item)); setSelected(current => current?.id === row.announcement_id ? { ...current, read: true } : current); },
+    onUpdate: payload => { const row = payload.new as { announcement_id?: string; user_id?: string }; if (row.user_id !== user?.id || !row.announcement_id) return; setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: true } : item)); },
+    onDelete: payload => { const row = payload.old as { announcement_id?: string; user_id?: string }; if (row.user_id !== user?.id || !row.announcement_id) return; setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: false } : item)); },
+    enabled: Boolean(user?.id),
+  });
 
   const openAnnouncement = async (announcement: Announcement) => {
     setSelected(announcement);
@@ -93,7 +105,7 @@ export const AnnouncementsPage: React.FC = () => {
         const { error } = await supabase.from('announcements').insert({ author_id: user.id, title: normalizedTitle, content: normalizedContent });
         if (error) throw error;
       }
-      setTitle(''); setContent(''); setEditing(null); setShowComposer(false); await loadAnnouncements();
+      setTitle(''); setContent(''); setEditing(null); setShowComposer(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Errore sconosciuto';
       alert(`Errore salvataggio annuncio: ${message}`);
@@ -107,7 +119,6 @@ export const AnnouncementsPage: React.FC = () => {
     const { error } = await supabase.from('announcements').delete().eq('id', announcement.id);
     if (error) { alert(`Errore eliminazione annuncio: ${error.message}`); return; }
     setSelected(null);
-    await loadAnnouncements();
   };
 
   const unreadCount = useMemo(() => announcements.filter(item => !item.read).length, [announcements]);
