@@ -75,8 +75,7 @@ jobs:
               return s
           patch('src/components/DocumentsPage.tsx',documents)
 
-          Path('src/hooks/useGlobalRealtimeRefresh.ts').unlink(missing_ok=True)
-          print('changed:',changed)
+          print('realtime patches prepared')
           PY
       - name: Build check
         run: npm ci --silent && npm run build
