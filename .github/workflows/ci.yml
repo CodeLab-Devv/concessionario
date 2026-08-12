@@ -27,39 +27,22 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path('src/components/ActivityPage.tsx')
-          s = p.read_text()
-          if 'type RealtimeRow = Record<string, unknown>;' not in s:
-              marker = "import { useAuth } from '../context/AuthContext';"
-              helper = """\n\ntype RealtimeRow = Record<string, unknown> & {\n  id?: string; employee_id?: string; employee_name?: string; item_name?: string;\n  car_model?: string; price?: number | string; quantity?: number | string; total?: number | string;\n  date?: string; type?: string; category?: string; discount_type?: string; created_at?: string;\n};\n"""
-              s = s.replace(marker, marker + helper, 1)
-          s = s.replace('Record<string,any>', 'RealtimeRow')
-          p.write_text(s)
+          replacements = {
+              'src/components/AdminPage.tsx': {
+                  'role:row.role ?? \'\'': "role: String(row.role || '')",
+                  "getDefaultCommission(row.role ?? '')": "getDefaultCommission(String(row.role || ''))",
+              },
+              'src/components/Dashboard.tsx': {
+                  'role:nextRow.role ?? \'\'': "role: String(nextRow.role || '')",
+              },
+          }
 
-          p = Path('src/components/AdminPage.tsx')
-          s = p.read_text()
-          if "type RealtimePayload" not in s:
-              s = s.replace("import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';", "import { useRealtimeSubscription, type RealtimePayload } from '../hooks/useRealtimeSubscription';", 1)
-          if 'type AdminRealtimeRow = Record<string, unknown>;' not in s:
-              marker = "import { useAuth } from '../context/AuthContext';"
-              helper = """\n\ntype AdminRealtimeRow = Record<string, unknown> & {\n  id?: string; name?: string; email?: string; role?: string; employee_id?: string; total?: number | string; availability?: unknown;\n};\n"""
-              s = s.replace(marker, marker + helper, 1)
-          s = s.replace('Record<string,any>', 'AdminRealtimeRow')
-          s = s.replace('payload:any', 'payload: RealtimePayload')
-          s = s.replace('role:row.role', "role:row.role ?? ''")
-          s = s.replace('getDefaultCommission(row.role)', "getDefaultCommission(row.role ?? '')")
-          p.write_text(s)
-
-          p = Path('src/components/Dashboard.tsx')
-          s = p.read_text()
-          if 'type DashboardRealtimeRow = Record<string, unknown>;' not in s:
-              marker = "import { useAuth } from '../context/AuthContext';"
-              helper = """\n\ntype DashboardRealtimeRow = Record<string, unknown> & {\n  id?: string; employee_id?: string; employee_name?: string; item_name?: string; car_model?: string;\n  price?: number | string; quantity?: number | string; total?: number | string; date?: string;\n  type?: string; category?: string; created_at?: string; name?: string; email?: string; role?: string;\n  employee_type?: string; is_on_service?: boolean | null; last_service_status_change?: string | null; avatar_url?: string | null;\n};\n"""
-              s = s.replace(marker, marker + helper, 1)
-          s = s.replace('Record<string,any>', 'DashboardRealtimeRow')
-          s = s.replace("event.detail||{}", "event.detail as { eventType?: string; new?: DashboardRealtimeRow | null; old?: DashboardRealtimeRow | null }")
-          s = s.replace('role:nextRow.role', "role:nextRow.role ?? ''")
-          p.write_text(s)
+          for filename, mapping in replacements.items():
+              path = Path(filename)
+              text = path.read_text()
+              for old, new in mapping.items():
+                  text = text.replace(old, new)
+              path.write_text(text)
 
           for path in [
               '.github/workflows/fix-lint-realtime-types.yml',
