@@ -3,6 +3,7 @@ import { AlertTriangle, Plus, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from './ui/NotificationManager';
+import { useDialogs } from './ui/DialogManager';
 
 interface Warning {
   id: string;
@@ -21,6 +22,7 @@ interface EmployeeWarningsSectionProps {
 export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = ({ employeeId, employeeName }) => {
   const { user } = useAuth();
   const { showSuccess, showError, showWarning } = useNotifications();
+  const { showDeleteConfirm } = useDialogs();
   const isOwner = user?.role === 'owner';
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [open, setOpen] = useState(false);
@@ -80,7 +82,10 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
   };
 
   const deleteWarning = async (id: string) => {
-    if (!isOwner || !window.confirm('Eliminare definitivamente questo richiamo?')) return;
+    if (!isOwner) return;
+    const confirmed = await showDeleteConfirm('questo richiamo', 'richiamo');
+    if (!confirmed) return;
+
     const { error } = await supabase.from('disciplinary_warnings').delete().eq('id', id);
     if (error) {
       showError('Impossibile eliminare il richiamo', error.message);
