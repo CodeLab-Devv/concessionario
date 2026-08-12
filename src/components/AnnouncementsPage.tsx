@@ -43,6 +43,7 @@ export const AnnouncementsPage: React.FC = () => {
 
   useEffect(() => { void loadAnnouncements(); }, [loadAnnouncements]);
   useRealtimeSubscription({ table: 'announcements', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });
+  useRealtimeSubscription({ table: 'announcement_reads', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });
 
   const openAnnouncement = async (announcement: Announcement) => {
     setSelected(announcement);
@@ -68,19 +69,35 @@ export const AnnouncementsPage: React.FC = () => {
   const startEdit = (announcement: Announcement) => { if (!canManage) return; setEditing(announcement); setTitle(announcement.title); setContent(announcement.content); setSelected(null); setShowComposer(true); };
 
   const saveAnnouncement = async () => {
-    if (!user?.id || !canManage || !title.trim() || !content.trim()) return;
+    const normalizedTitle = title.trim();
+    const normalizedContent = content.trim();
+    if (!user?.id || !canManage || !normalizedTitle || !normalizedContent) return;
+    if (normalizedTitle.length < 3) {
+      alert('Il titolo deve contenere almeno 3 caratteri.');
+      return;
+    }
+    if (normalizedTitle.length > 120) {
+      alert('Il titolo non può superare 120 caratteri.');
+      return;
+    }
+    if (normalizedContent.length > 10000) {
+      alert('Il contenuto non può superare 10.000 caratteri.');
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
-        const { error } = await supabase.from('announcements').update({ title: title.trim(), content: content.trim(), updated_at: new Date().toISOString() }).eq('id', editing.id);
+        const { error } = await supabase.from('announcements').update({ title: normalizedTitle, content: normalizedContent, updated_at: new Date().toISOString() }).eq('id', editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('announcements').insert({ author_id: user.id, title: title.trim(), content: content.trim() });
+        const { error } = await supabase.from('announcements').insert({ author_id: user.id, title: normalizedTitle, content: normalizedContent });
         if (error) throw error;
       }
       setTitle(''); setContent(''); setEditing(null); setShowComposer(false); await loadAnnouncements();
-    } catch (error) { alert(`Errore salvataggio annuncio: ${(error as Error).message}`); }
-    finally { setSaving(false); }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Errore sconosciuto';
+      alert(`Errore salvataggio annuncio: ${message}`);
+    } finally { setSaving(false); }
   };
 
   const deleteAnnouncement = async (announcement: Announcement) => {
@@ -104,7 +121,7 @@ export const AnnouncementsPage: React.FC = () => {
 
       {showComposer && canManage && <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold text-gray-900">{editing ? 'Modifica annuncio' : 'Pubblica annuncio'}</h2><button onClick={() => { setShowComposer(false); setEditing(null); }} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><X className="h-4 w-4" /></button></div>
-        <div className="space-y-3"><input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder="Titolo dell'annuncio" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100" /><textarea value={content} onChange={event => setContent(event.target.value)} maxLength={10000} rows={5} placeholder="Scrivi il messaggio per il team..." className="w-full resize-y rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100" /><div className="flex justify-end"><button disabled={saving || !title.trim() || !content.trim()} onClick={() => void saveAnnouncement()} className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" />{saving ? 'Salvataggio...' : editing ? 'Salva modifiche' : 'Pubblica'}</button></div></div></div>}
+        <div className="space-y-3"><input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder="Titolo dell'annuncio (minimo 3 caratteri)" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100" /><textarea value={content} onChange={event => setContent(event.target.value)} maxLength={10000} rows={5} placeholder="Scrivi il messaggio per il team..." className="w-full resize-y rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100" /><div className="flex justify-end"><button disabled={saving || title.trim().length < 3 || !content.trim() || content.trim().length > 10000} onClick={() => void saveAnnouncement()} className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" />{saving ? 'Salvataggio...' : editing ? 'Salva modifiche' : 'Pubblica'}</button></div></div></div>}
 
       {loading ? <div className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">Caricamento annunci...</div> : announcements.length === 0 ? <div className="rounded-2xl border bg-white p-10 text-center"><Bell className="mx-auto h-9 w-9 text-gray-300" /><p className="mt-3 font-medium text-gray-700">Nessun annuncio</p><p className="mt-1 text-sm text-gray-400">Le comunicazioni del team appariranno qui.</p></div> : <div className="grid gap-3 md:grid-cols-2">{announcements.map(announcement => <div key={announcement.id} className={`group rounded-2xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${announcement.read ? 'border-gray-100' : 'border-amber-200 bg-amber-50/30'}`}>
         <button onClick={() => void openAnnouncement(announcement)} className="block w-full text-left"><div className="flex gap-3"><div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200">{announcement.author?.avatar_url ? <img src={announcement.author.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-gray-500">{announcement.author?.name?.slice(0,1).toUpperCase() || '?'}</div>}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h3 className="truncate font-semibold text-gray-900">{announcement.title}</h3>{!announcement.read ? <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Nuovo</span> : <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700"><Check className="h-3 w-3" />Visualizzato</span>}</div><p className="mt-0.5 text-xs text-gray-500">{announcement.author?.name || 'Utente'} · {formatDate(announcement.created_at)}</p><p className="mt-2 line-clamp-2 text-sm leading-5 text-gray-600">{announcement.content}</p></div><ChevronRight className="mt-3 h-4 w-4 shrink-0 text-gray-300 transition group-hover:translate-x-0.5" /></div></button>
