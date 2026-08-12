@@ -1,0 +1,36 @@
+name: fix-admin-unused
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'trigger admin realtime lint fix')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove unused realtime handler and verify
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('src/components/AdminPage.tsx')
+          s = p.read_text()
+          pattern = r"\n  const handleUsersRealtimeChange = useCallback\(\(payload: RealtimePayload\) => \{.*?\n  \}, \[\]\);\n\n"
+          n, count = re.subn(pattern, '\n', s, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit(f'Expected one unused handler, removed {count}')
+          p.write_text(n)
+          PY
+          npm ci --silent
+          npm run lint
+          npm run build
+      - name: Commit and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/fix-admin-unused.yml .github/workflows/fix-lint-realtime-types.yml
+          git add src .github/workflows/fix-admin-unused.yml .github/workflows/fix-lint-realtime-types.yml
+          git commit -m 'fix: pass lint after realtime type cleanup'
+          git push
