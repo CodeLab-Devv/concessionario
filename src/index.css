@@ -25,7 +25,14 @@ body {
   height: 100dvh;
 }
 
+/*
+ * Modali: devono sempre stare sopra alla barra di navigazione/header.
+ * In particolare su iOS/Android alcuni header hanno stacking context propri.
+ */
 .safe-area-overlay {
+  position: fixed;
+  z-index: 9990 !important;
+  isolation: isolate;
   padding-top: max(1rem, env(safe-area-inset-top));
   padding-right: max(1rem, env(safe-area-inset-right));
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
