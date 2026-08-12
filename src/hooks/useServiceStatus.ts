@@ -3,33 +3,21 @@ import { supabase } from '../lib/supabase';
 import type { User } from '../types';
 
 export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null | undefined) => {
-  const [isOnService, setIsOnService] = useState(Boolean(user?.isOnService));
+  const userId = user?.id;
+  const userStatus = Boolean(user?.isOnService);
+  const [isOnService, setIsOnService] = useState(userStatus);
 
   useEffect(() => {
-    if (!user?.id) {
+    setIsOnService(userStatus);
+  }, [userStatus]);
+
+  useEffect(() => {
+    if (!userId) {
       setIsOnService(false);
       return;
     }
 
     let mounted = true;
-    const userId = user.id;
-    const initialStatus = Boolean(user.isOnService);
-
-    setIsOnService(initialStatus);
-
-    const refresh = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_on_service')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!error && mounted) {
-        setIsOnService(Boolean(data?.is_on_service));
-      }
-    };
-
-    void refresh();
 
     const channel = supabase
       .channel(`service-status-${userId}`)
@@ -46,25 +34,16 @@ export const useServiceStatus = (user: Pick<User, 'id' | 'isOnService'> | null |
 
           if (!row?.id || String(row.id) !== String(userId)) return;
 
-          if (payload.eventType === 'DELETE') {
-            setIsOnService(false);
-            return;
-          }
-
-          setIsOnService(Boolean(row.is_on_service));
+          setIsOnService(payload.eventType === 'DELETE' ? false : Boolean(row.is_on_service));
         },
       )
-      .subscribe(status => {
-        if (status === 'SUBSCRIBED') {
-          void refresh();
-        }
-      });
+      .subscribe();
 
     return () => {
       mounted = false;
       void supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [userId]);
 
   return isOnService;
 };
