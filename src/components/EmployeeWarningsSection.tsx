@@ -48,10 +48,30 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
   useEffect(() => {
     const channel = supabase
       .channel(`employee-warnings-${employeeId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'disciplinary_warnings', filter: `employee_id=eq.${employeeId}` }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disciplinary_warnings', filter: `employee_id=eq.${employeeId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as Warning;
+          setWarnings(current => current.some(item => item.id === row.id) ? current : [row, ...current]);
+          return;
+        }
+
+        if (payload.eventType === 'UPDATE') {
+          const row = payload.new as Warning;
+          setWarnings(current => current.some(item => item.id === row.id)
+            ? current.map(item => item.id === row.id ? row : item)
+            : [row, ...current]);
+          return;
+        }
+
+        if (payload.eventType === 'DELETE') {
+          const row = payload.old as Pick<Warning, 'id'>;
+          setWarnings(current => current.filter(item => item.id !== row.id));
+        }
+      })
       .subscribe();
+
     return () => { void supabase.removeChannel(channel); };
-  }, [employeeId, load]);
+  }, [employeeId]);
 
   const createWarning = async () => {
     if (!isOwner || !user?.id || saving) return;
@@ -73,7 +93,6 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
       setSeverity('richiamo');
       setOpen(false);
       showSuccess('Richiamo registrato', `Richiamo assegnato a ${employeeName}.`);
-      await load();
     } catch (error) {
       showError('Impossibile registrare il richiamo', error instanceof Error ? error.message : 'Riprova.');
     } finally {
