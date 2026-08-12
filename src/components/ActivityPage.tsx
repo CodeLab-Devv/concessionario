@@ -1,19 +1,532 @@
-import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{Activity,Search,BarChart3,TrendingUp}from'lucide-react';
-import{supabase}from'../lib/supabase';
-import{useAuth}from'../context/AuthContext';
-import{Sale,User}from'../types';
-interface SaleRow{ id:string;employee_id:string;employee_name:string;item_name:string;car_model?:string|null;price:number|string;quantity:number|string;total:number|string;date:string;discount_type?:'employee'|'collaboration'|null;created_at?:string|null }
-type SortMode='revenue-desc'|'revenue-asc'|'name-asc'|'name-desc'|'sales-desc'|'sales-asc';
-const days=[['1','Lun'],['2','Mar'],['3','Mer'],['4','Gio'],['5','Ven'],['6','Sab'],['0','Dom']];
-const money=(n:number)=>`$${Math.round(n).toLocaleString('it-IT')}`;
-const weekStart=()=>{const d=new Date();const day=d.getDay();d.setDate(d.getDate()-(day===0?6:day-1));d.setHours(0,0,0,0);return d};
-export const ActivityPage:React.FC=()=>{const{user}=useAuth();const[sales,setSales]=useState<Sale[]>([]);const[users,setUsers]=useState<User[]>([]);const[q,setQ]=useState('');const[selected,setSelected]=useState('all');const[sort,setSort]=useState<SortMode>('revenue-desc');const[period,setPeriod]=useState('week');const[loading,setLoading]=useState(true);const isHighRank=['owner','director','vice_director'].includes(user?.role||'');const isOnService=Boolean(user?.isOnService);
-const load=useCallback(async()=>{if(!user||!isHighRank||!isOnService)return;setLoading(true);const sq=supabase.from('sales').select('*').order('created_at',{ascending:false});const[sa,us]=await Promise.all([sq,supabase.from('users').select('id,name,email,role,employee_type,avatar_url,created_at').order('name')]);if(!sa.error)setSales(((sa.data||[])as SaleRow[]).map(s=>({id:s.id,employeeId:s.employee_id,employeeName:s.employee_name,itemName:s.item_name,carModel:s.car_model??undefined,price:Number(s.price)||0,quantity:Number(s.quantity)||0,total:Number(s.total)||0,date:s.date,type:'sale',category:'concessionari',discountType:s.discount_type??undefined,created_at:s.created_at||`${s.date}T00:00:00.000Z`})));if(!us.error)setUsers((us.data||[])as User[]);setLoading(false)},[isHighRank,isOnService,user]);
-useEffect(()=>{void load()},[load]);useEffect(()=>{if(!isHighRank||!isOnService)return;const c=supabase.channel('activity-sales').on('postgres_changes',{event:'*',schema:'public',table:'sales'},()=>void load()).subscribe();return()=>{void supabase.removeChannel(c)}},[isHighRank,isOnService,load]);
-const filtered=useMemo(()=>{const now=new Date();const start=period==='week'?weekStart():period==='month'?new Date(now.getFullYear(),now.getMonth(),1):null;return sales.filter(s=>(!start||new Date(s.created_at||s.date)>=start)&&(selected==='all'||s.employeeId===selected)&&(!q||s.employeeName.toLowerCase().includes(q.toLowerCase())))},[sales,period,selected,q]);
-const stats=useMemo(()=>{const m=new Map<string,{id:string,name:string,sales:number,revenue:number}>();users.forEach(u=>m.set(u.id,{id:u.id,name:u.name,sales:0,revenue:0}));filtered.forEach(s=>{const x=m.get(s.employeeId)||{id:s.employeeId,name:s.employeeName,sales:0,revenue:0};x.sales++;x.revenue+=s.total;m.set(s.employeeId,x)});return[...m.values()].filter(x=>!q||x.name.toLowerCase().includes(q.toLowerCase())).sort((a,b)=>sort==='revenue-desc'?b.revenue-a.revenue:sort==='revenue-asc'?a.revenue-b.revenue:sort==='name-asc'?a.name.localeCompare(b.name,'it'):sort==='name-desc'?b.name.localeCompare(a.name,'it'):sort==='sales-desc'?b.sales-a.sales:a.sales-b.sales)},[filtered,users,q,sort]);
-const chart=days.map(([key,label])=>{const d=weekStart();d.setDate(d.getDate()+(key==='0'?6:+key-1));const date=d.toISOString().slice(0,10);return{label,revenue:filtered.filter(s=>s.date===date).reduce((a,s)=>a+s.total,0)}});const max=Math.max(...chart.map(x=>x.revenue),1);const total=filtered.reduce((a,s)=>a+s.total,0);const bestDay=chart.reduce((best,x)=>x.revenue>best.revenue?x:best,chart[0]);
-if(!isHighRank)return <div className="flex h-96 items-center justify-center"><div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm"><Activity className="mx-auto mb-3 h-8 w-8 text-gray-300"/><h3 className="font-bold text-gray-900">Sezione riservata</h3><p className="mt-1 text-sm text-gray-500">Le attività sono visibili solo ai gradi alti.</p></div></div>;
-if(!isOnService)return <div className="flex h-96 items-center justify-center"><div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm"><Activity className="mx-auto mb-3 h-8 w-8 text-amber-400"/><h3 className="font-bold text-gray-900">Non sei in servizio</h3><p className="mt-1 text-sm text-gray-500">Metti lo stato in servizio per visualizzare le attività.</p></div></div>;
-return <div className="space-y-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2 text-amber-600"><Activity className="h-5 w-5"/><span className="text-sm font-semibold">Performance • Accesso riservato</span></div><h1 className="text-3xl font-bold text-gray-900">Attività</h1><p className="text-sm text-gray-500">Analisi del fatturato e delle vendite del team.</p></div><div className="flex gap-2">{['week','month','all'].map(p=><button key={p} onClick={()=>setPeriod(p)} className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${period===p?'border-amber-500 bg-amber-500 text-white shadow-sm':'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>{p==='week'?'Settimana':p==='month'?'Mese':'Tutto'}</button>)}</div></div><div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"><span className="text-sm text-gray-500">Fatturato</span><div className="mt-2 text-2xl font-bold text-gray-900">{money(total)}</div><div className="mt-2 flex items-center gap-1 text-xs font-semibold text-emerald-600"><TrendingUp className="h-3.5 w-3.5"/>Totale periodo</div></div><div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"><span className="text-sm text-gray-500">Vendite</span><div className="mt-2 text-2xl font-bold text-gray-900">{filtered.length}</div><div className="mt-2 text-xs text-gray-400">Operazioni concluse</div></div><div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"><span className="text-sm text-gray-500">Giorno migliore</span><div className="mt-2 text-2xl font-bold text-gray-900">{bestDay?.label||'—'}</div><div className="mt-2 text-xs font-semibold text-amber-600">{money(bestDay?.revenue||0)}</div></div></div><section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"><div className="border-b border-gray-100 bg-gradient-to-r from-amber-50 via-white to-yellow-50 px-5 py-5"><div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-amber-500"/><h2 className="font-bold text-gray-900">Fatturato giornaliero</h2></div><p className="mt-1 text-xs text-gray-500">Andamento da lunedì a domenica • {period==='week'?'settimana corrente':period==='month'?'mese corrente':'tutto lo storico'}</p></div><div className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-right shadow-sm"><div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Picco</div><div className="text-sm font-bold text-gray-900">{bestDay?.label} · {money(bestDay?.revenue||0)}</div></div></div></div><div className="p-5"><div className="relative h-72"><div className="absolute inset-x-0 top-0 flex flex-col justify-between text-[10px] text-gray-300" style={{height:'calc(100% - 34px)'}}>{[1,.75,.5,.25,0].map(v=><div key={v} className="flex items-center gap-2"><span className="w-10 text-right">{money(max*v)}</span><div className="h-px flex-1 bg-gray-100"/></div>)}</div><div className="absolute inset-x-12 bottom-8 top-0 flex items-end justify-between gap-2 sm:gap-4">{chart.map(x=>{const height=x.revenue?Math.max(x.revenue/max*100,5):2;const active=x.revenue===max&&x.revenue>0;return <div key={x.label} className="group flex h-full flex-1 flex-col items-center justify-end"><div className="mb-2 rounded-lg bg-gray-900 px-2 py-1 text-[10px] font-semibold text-white opacity-0 shadow-lg transition group-hover:opacity-100">{money(x.revenue)}</div><div className={`w-full max-w-14 rounded-t-lg transition-all duration-500 group-hover:brightness-95 ${active?'bg-gradient-to-t from-amber-600 to-yellow-300':'bg-gradient-to-t from-amber-500/80 to-yellow-200'}`} style={{height:`${height}%`}}/><span className="mt-2 text-xs font-semibold text-gray-500">{x.label}</span></div>})}</div></div></div></section><section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"><div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="font-bold text-gray-900">Classifica dipendenti</h2><p className="text-xs text-gray-500">Cerca, seleziona e ordina le performance.</p></div><div className="flex flex-wrap gap-2"><div className="relative min-w-52"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Cerca dipendente..." className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"/></div><select value={selected} onChange={e=>setSelected(e.target.value)} className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-500"><option value="all">Tutti i dipendenti</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select><select value={sort} onChange={e=>setSort(e.target.value as SortMode)} className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-500"><option value="revenue-desc">Fatturato: più alto</option><option value="revenue-asc">Fatturato: più basso</option><option value="sales-desc">Vendite: più alte</option><option value="sales-asc">Vendite: più basse</option><option value="name-asc">Nome: A → Z</option><option value="name-desc">Nome: Z → A</option></select></div></div>{loading?<div className="p-10 text-center text-sm text-gray-500">Caricamento...</div>:<div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left"><thead><tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400"><th className="px-3 py-3">Dipendente</th><th className="px-3 py-3">Vendite</th><th className="px-3 py-3">Fatturato</th><th className="px-3 py-3">Media</th></tr></thead><tbody>{stats.map((x,i)=><tr key={x.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50"><td className="px-3 py-3 font-semibold"><span className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-xs font-bold text-amber-700">{i+1}</span>{x.name}</td><td className="px-3 py-3 text-sm text-gray-600">{x.sales}</td><td className="px-3 py-3 font-bold text-gray-900">{money(x.revenue)}</td><td className="px-3 py-3 text-sm text-gray-600">{money(x.sales?x.revenue/x.sales:0)}</td></tr>)}</tbody></table></div>}</section></div>};
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  BarChart3,
+  CalendarDays,
+  CircleDollarSign,
+  Search,
+  TrendingUp,
+  Trophy,
+  Users,
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { Sale, User } from '../types';
+
+interface SaleRow {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  item_name: string;
+  car_model?: string | null;
+  price: number | string;
+  quantity: number | string;
+  total: number | string;
+  date: string;
+  discount_type?: 'employee' | 'collaboration' | null;
+  created_at?: string | null;
+}
+
+type SortMode =
+  | 'revenue-desc'
+  | 'revenue-asc'
+  | 'name-asc'
+  | 'name-desc'
+  | 'sales-desc'
+  | 'sales-asc';
+type Period = 'week' | 'month' | 'all';
+
+const days = [
+  ['1', 'Lun'],
+  ['2', 'Mar'],
+  ['3', 'Mer'],
+  ['4', 'Gio'],
+  ['5', 'Ven'],
+  ['6', 'Sab'],
+  ['0', 'Dom'],
+] as const;
+
+const money = (value: number) => `$${Math.round(value).toLocaleString('it-IT')}`;
+
+const weekStart = () => {
+  const date = new Date();
+  const day = date.getDay();
+  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const periodLabels: Record<Period, string> = {
+  week: 'Settimana corrente',
+  month: 'Mese corrente',
+  all: 'Tutto lo storico',
+};
+
+export const ActivityPage: React.FC = () => {
+  const { user } = useAuth();
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [q, setQ] = useState('');
+  const [selected, setSelected] = useState('all');
+  const [sort, setSort] = useState<SortMode>('revenue-desc');
+  const [period, setPeriod] = useState<Period>('week');
+  const [loading, setLoading] = useState(true);
+
+  const isHighRank = ['owner', 'director', 'vice_director'].includes(user?.role || '');
+  const isOnService = Boolean(user?.isOnService);
+
+  const load = useCallback(async () => {
+    if (!user || !isHighRank || !isOnService) return;
+
+    setLoading(true);
+
+    try {
+      const salesQuery = supabase
+        .from('sales')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const [salesResult, usersResult] = await Promise.all([
+        salesQuery,
+        supabase
+          .from('users')
+          .select('id,name,email,role,employee_type,avatar_url,created_at')
+          .order('name'),
+      ]);
+
+      if (!salesResult.error) {
+        setSales(
+          ((salesResult.data || []) as SaleRow[]).map((sale) => ({
+            id: sale.id,
+            employeeId: sale.employee_id,
+            employeeName: sale.employee_name,
+            itemName: sale.item_name,
+            carModel: sale.car_model ?? undefined,
+            price: Number(sale.price) || 0,
+            quantity: Number(sale.quantity) || 0,
+            total: Number(sale.total) || 0,
+            date: sale.date,
+            type: 'sale',
+            category: 'concessionari',
+            discountType: sale.discount_type ?? undefined,
+            created_at: sale.created_at || `${sale.date}T00:00:00.000Z`,
+          })),
+        );
+      }
+
+      if (!usersResult.error) {
+        setUsers((usersResult.data || []) as User[]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [isHighRank, isOnService, user]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!isHighRank || !isOnService) return;
+
+    const channel = supabase
+      .channel('activity-sales')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales' },
+        () => void load(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [isHighRank, isOnService, load]);
+
+  const filtered = useMemo(() => {
+    const now = new Date();
+    const start =
+      period === 'week'
+        ? weekStart()
+        : period === 'month'
+          ? new Date(now.getFullYear(), now.getMonth(), 1)
+          : null;
+
+    const query = q.trim().toLowerCase();
+
+    return sales.filter((sale) => {
+      const saleDate = new Date(sale.created_at || sale.date);
+      return (
+        (!start || saleDate >= start) &&
+        (selected === 'all' || sale.employeeId === selected) &&
+        (!query || sale.employeeName.toLowerCase().includes(query))
+      );
+    });
+  }, [period, q, sales, selected]);
+
+  const stats = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; sales: number; revenue: number }>();
+
+    users.forEach((employee) => {
+      map.set(employee.id, {
+        id: employee.id,
+        name: employee.name,
+        sales: 0,
+        revenue: 0,
+      });
+    });
+
+    filtered.forEach((sale) => {
+      const current =
+        map.get(sale.employeeId) || {
+          id: sale.employeeId,
+          name: sale.employeeName,
+          sales: 0,
+          revenue: 0,
+        };
+
+      current.sales += 1;
+      current.revenue += sale.total;
+      map.set(sale.employeeId, current);
+    });
+
+    return [...map.values()]
+      .filter((employee) => !q.trim() || employee.name.toLowerCase().includes(q.trim().toLowerCase()))
+      .sort((a, b) => {
+        switch (sort) {
+          case 'revenue-desc':
+            return b.revenue - a.revenue;
+          case 'revenue-asc':
+            return a.revenue - b.revenue;
+          case 'name-asc':
+            return a.name.localeCompare(b.name, 'it');
+          case 'name-desc':
+            return b.name.localeCompare(a.name, 'it');
+          case 'sales-desc':
+            return b.sales - a.sales;
+          default:
+            return a.sales - b.sales;
+        }
+      });
+  }, [filtered, q, sort, users]);
+
+  const chart = useMemo(
+    () =>
+      days.map(([key, label]) => {
+        const date = weekStart();
+        date.setDate(date.getDate() + (key === '0' ? 6 : Number(key) - 1));
+        const dateKey = date.toISOString().slice(0, 10);
+
+        return {
+          label,
+          dateKey,
+          revenue: filtered
+            .filter((sale) => sale.date === dateKey)
+            .reduce((total, sale) => total + sale.total, 0),
+        };
+      }),
+    [filtered],
+  );
+
+  const total = filtered.reduce((value, sale) => value + sale.total, 0);
+  const max = Math.max(...chart.map((day) => day.revenue), 1);
+  const bestDay = chart.reduce((best, day) => (day.revenue > best.revenue ? day : best), chart[0]);
+  const activeEmployees = stats.filter((employee) => employee.sales > 0).length;
+
+  if (!isHighRank) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center px-4">
+        <div className="max-w-md rounded-3xl border border-gray-200 bg-white p-10 text-center shadow-xl shadow-gray-200/40">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+            <Activity className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900">Sezione riservata</h3>
+          <p className="mt-2 text-sm leading-6 text-gray-500">
+            Le analisi delle performance sono disponibili solo ai gradi alti.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOnService) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center px-4">
+        <div className="max-w-md rounded-3xl border border-amber-200 bg-white p-10 text-center shadow-xl shadow-amber-100/50">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50">
+            <Activity className="h-8 w-8 text-amber-500" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900">Non sei in servizio</h3>
+          <p className="mt-2 text-sm leading-6 text-gray-500">
+            Metti lo stato in servizio per visualizzare le attività del concessionario.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-8">
+      <section className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-gray-950 via-gray-900 to-amber-950 px-5 py-6 text-white shadow-xl shadow-gray-200/50 sm:px-7 sm:py-7">
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-400/15 blur-3xl" />
+        <div className="absolute -bottom-20 left-1/3 h-52 w-52 rounded-full bg-yellow-300/10 blur-3xl" />
+        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-amber-200 backdrop-blur-sm">
+              <Activity className="h-3.5 w-3.5" />
+              Performance riservate
+            </div>
+            <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Attività</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-300 sm:text-base">
+              Una panoramica chiara di fatturato, vendite e rendimento del team.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-sm">
+            {(['week', 'month', 'all'] as Period[]).map((value) => (
+              <button
+                key={value}
+                onClick={() => setPeriod(value)}
+                className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition-all ${
+                  period === value
+                    ? 'bg-white text-gray-900 shadow-lg'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {value === 'week' ? 'Settimana' : value === 'month' ? 'Mese' : 'Tutto'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Fatturato</p>
+              <p className="mt-3 text-3xl font-black tracking-tight text-gray-950">{money(total)}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+              <CircleDollarSign className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+            <TrendingUp className="h-3.5 w-3.5" />
+            {periodLabels[period]}
+          </div>
+        </div>
+
+        <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Vendite</p>
+              <p className="mt-3 text-3xl font-black tracking-tight text-gray-950">{filtered.length}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-xs font-medium text-gray-400">Operazioni concluse</p>
+        </div>
+
+        <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Giorno migliore</p>
+              <p className="mt-3 text-3xl font-black tracking-tight text-gray-950">{bestDay?.label || '—'}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
+              <Trophy className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-xs font-semibold text-yellow-600">{money(bestDay?.revenue || 0)}</p>
+        </div>
+
+        <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Team attivo</p>
+              <p className="mt-3 text-3xl font-black tracking-tight text-gray-950">{activeEmployees}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+              <Users className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-xs font-medium text-gray-400">Dipendenti con vendite</p>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-5 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <BarChart3 className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-950">Andamento del fatturato</h2>
+                <p className="text-xs text-gray-400">Lunedì → Domenica · {periodLabels[period]}</p>
+              </div>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 xl:self-auto">
+            <CalendarDays className="h-4 w-4 text-amber-500" />
+            Picco: <span className="text-gray-950">{bestDay?.label || '—'}</span>
+            <span className="text-amber-600">{money(bestDay?.revenue || 0)}</span>
+          </div>
+        </div>
+
+        <div className="p-5 sm:p-6">
+          <div className="relative h-[320px]">
+            <div className="absolute inset-x-0 top-0 bottom-9 flex flex-col justify-between text-[10px] text-gray-300">
+              {[1, 0.75, 0.5, 0.25, 0].map((value) => (
+                <div key={value} className="flex items-center gap-3">
+                  <span className="w-14 text-right font-medium">{money(max * value)}</span>
+                  <div className="h-px flex-1 bg-gray-100" />
+                </div>
+              ))}
+            </div>
+
+            <div className="absolute inset-x-16 bottom-0 top-2 flex items-end justify-between gap-2 sm:gap-4">
+              {chart.map((day) => {
+                const height = day.revenue ? Math.max((day.revenue / max) * 100, 6) : 2;
+                const active = day.revenue === max && day.revenue > 0;
+
+                return (
+                  <div key={day.label} className="group flex h-full flex-1 flex-col items-center justify-end">
+                    <div className="mb-2 translate-y-1 rounded-lg border border-gray-800 bg-gray-950 px-2.5 py-1.5 text-[10px] font-bold text-white opacity-0 shadow-lg transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                      {money(day.revenue)}
+                    </div>
+                    <div className="flex h-full w-full items-end justify-center">
+                      <div
+                        className={`w-full max-w-14 rounded-t-xl transition-all duration-500 group-hover:-translate-y-1 ${
+                          active
+                            ? 'bg-gradient-to-t from-amber-600 via-amber-500 to-yellow-300 shadow-lg shadow-amber-200'
+                            : 'bg-gradient-to-t from-amber-500/85 to-yellow-200'
+                        }`}
+                        style={{ height: `${height}%` }}
+                      />
+                    </div>
+                    <span className={`mt-3 text-xs font-semibold ${active ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {day.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="font-bold text-gray-950">Classifica dipendenti</h2>
+              <p className="mt-1 text-xs text-gray-400">Confronta il rendimento del team nel periodo selezionato.</p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="relative min-w-0 sm:min-w-[220px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                  placeholder="Cerca dipendente..."
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-50"
+                />
+              </div>
+
+              <select
+                value={selected}
+                onChange={(event) => setSelected(event.target.value)}
+                className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-50"
+              >
+                <option value="all">Tutti i dipendenti</option>
+                {users.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as SortMode)}
+                className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-50"
+              >
+                <option value="revenue-desc">Fatturato più alto</option>
+                <option value="revenue-asc">Fatturato più basso</option>
+                <option value="sales-desc">Vendite più alte</option>
+                <option value="sales-asc">Vendite più basse</option>
+                <option value="name-asc">Nome A → Z</option>
+                <option value="name-desc">Nome Z → A</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-56 items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500" />
+              <p className="text-sm text-gray-500">Caricamento attività...</p>
+            </div>
+          </div>
+        ) : stats.length === 0 ? (
+          <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
+              <Users className="h-5 w-5 text-gray-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">Nessun risultato</p>
+            <p className="mt-1 text-xs text-gray-400">Prova a cambiare i filtri o la ricerca.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/80 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <th className="px-5 py-3.5">Dipendente</th>
+                  <th className="px-4 py-3.5">Vendite</th>
+                  <th className="px-4 py-3.5">Fatturato</th>
+                  <th className="px-4 py-3.5">Media</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map((employee, index) => (
+                  <tr key={employee.id} className="group border-b border-gray-50 last:border-0 hover:bg-amber-50/30">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black ${
+                            index === 0
+                              ? 'bg-amber-100 text-amber-700'
+                              : index === 1
+                                ? 'bg-slate-100 text-slate-600'
+                                : index === 2
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-gray-900">{employee.name}</div>
+                          <div className="text-xs text-gray-400">Performance team</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-sm font-semibold text-gray-600">{employee.sales}</td>
+                    <td className="px-4 py-4 text-sm font-black text-gray-950">{money(employee.revenue)}</td>
+                    <td className="px-4 py-4 text-sm font-semibold text-gray-500">
+                      {money(employee.sales ? employee.revenue / employee.sales : 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
