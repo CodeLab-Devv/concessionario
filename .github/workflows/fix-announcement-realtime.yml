@@ -1,0 +1,80 @@
+name: fix-announcement-realtime
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: |
+          if [ "${GITHUB_HEAD_REF}" != "" ] || [ "${GITHUB_EVENT_NAME}" != "push" ]; then exit 0; fi
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('src/components/AnnouncementsPage.tsx')
+          s = p.read_text()
+          old = "  useRealtimeSubscription({ table: 'announcements', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });\n  useRealtimeSubscription({ table: 'announcement_reads', onInsert: () => void loadAnnouncements(), onUpdate: () => void loadAnnouncements(), onDelete: () => void loadAnnouncements(), enabled: Boolean(user?.id) });"
+          new = """  useRealtimeSubscription({
+    table: 'announcements',
+    onInsert: payload => {
+      const row = payload.new as Announcement;
+      setAnnouncements(current => current.some(item => item.id === row.id) ? current : [{ ...row, read: row.author_id === user?.id }, ...current]);
+    },
+    onUpdate: payload => {
+      const row = payload.new as Announcement;
+      setAnnouncements(current => current.map(item => item.id === row.id ? { ...item, ...row, author: item.author, read: item.author_id === user?.id || item.read } : item));
+      setSelected(current => current?.id === row.id ? { ...current, ...row } : current);
+    },
+    onDelete: payload => {
+      const id = (payload.old as { id?: string }).id;
+      if (!id) return;
+      setAnnouncements(current => current.filter(item => item.id !== id));
+      setSelected(current => current?.id === id ? null : current);
+    },
+    enabled: Boolean(user?.id),
+  });
+
+  useRealtimeSubscription({
+    table: 'announcement_reads',
+    onInsert: payload => {
+      const row = payload.new as { announcement_id?: string; user_id?: string };
+      if (row.user_id !== user?.id || !row.announcement_id) return;
+      setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: true } : item));
+      setSelected(current => current?.id === row.announcement_id ? { ...current, read: true } : current);
+    },
+    onUpdate: payload => {
+      const row = payload.new as { announcement_id?: string; user_id?: string };
+      if (row.user_id !== user?.id || !row.announcement_id) return;
+      setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: true } : item));
+    },
+    onDelete: payload => {
+      const row = payload.old as { announcement_id?: string; user_id?: string };
+      if (row.user_id !== user?.id || !row.announcement_id) return;
+      setAnnouncements(current => current.map(item => item.id === row.announcement_id ? { ...item, read: false } : item));
+    },
+    enabled: Boolean(user?.id),
+  });"""
+          if old in s:
+              s = s.replace(old, new, 1)
+          s = s.replace("      setTitle(''); setContent(''); setEditing(null); setShowComposer(false); await loadAnnouncements();", "      setTitle(''); setContent(''); setEditing(null); setShowComposer(false);", 1)
+          s = s.replace("    setSelected(null);\n    await loadAnnouncements();", "    setSelected(null);", 1)
+          p.write_text(s)
+          Path('src/hooks/useGlobalRealtimeRefresh.ts').unlink(missing_ok=True)
+          PY
+          npm ci --silent
+          npm run build
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/fix-announcement-realtime.yml
+          git add src .github/workflows/fix-announcement-realtime.yml
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix: make announcements realtime without refetch'
+          git push
