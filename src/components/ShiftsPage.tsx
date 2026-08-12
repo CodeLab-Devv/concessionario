@@ -1340,21 +1340,22 @@ export const ShiftsPage: React.FC = () => {
               Comunica assenza
             </button>
 
-            <button
-              type="button"
-              onClick={() =>
-                openCreateShift()
-              }
-              disabled={
-                !canManage ||
-                users.length < 2 ||
-                saving
-              }
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus className="h-5 w-5" />
-              Aggiungi turno
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() =>
+                  openCreateShift()
+                }
+                disabled={
+                  users.length < 2 ||
+                  saving
+                }
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-4 font-semibold text-gray-950 shadow-lg transition hover:from-yellow-400 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus className="h-5 w-5" />
+                Aggiungi turno
+              </button>
+            )}
           </div>
         </div>
       </div>
