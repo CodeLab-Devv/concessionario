@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 150" role="img" aria-labelledby="title desc">
+  <title id="title">Aurum Motors</title>
+  <desc id="desc">Aurum Motors luxury automotive logo with AM monogram and vehicle silhouette.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1a8"/>
+      <stop offset=".32" stop-color="#f6c94a"/>
+      <stop offset=".7" stop-color="#d99a16"/>
+      <stop offset="1" stop-color="#fff0a0"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".5" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#64748b"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(4 8)">
+    <path d="M8 104 55 12l38 74 26-43 42 61" fill="none" stroke="url(#gold)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m55 12 37 74 25-43" fill="none" stroke="url(#silver)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 84c25-23 53-30 86-22 17 4 32 13 47 25" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M35 83c14-10 29-15 45-15 14 0 27 3 39 9l12 7" fill="none" stroke="#f8fafc" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="57" cy="94" r="5" fill="#0f172a" stroke="url(#gold)" stroke-width="3"/>
+    <circle cx="129" cy="94" r="5" fill="#0f172a" stroke="url(#gold)" stroke-width="3"/>
+  </g>
+  <g transform="translate(172 43)">
+    <text x="0" y="39" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="700" letter-spacing="2" fill="url(#gold)">AURUM</text>
+    <text x="154" y="39" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="700" letter-spacing="2" fill="#e2e8f0">MOTORS</text>
+    <path d="M2 55h275" stroke="url(#gold)" stroke-width="1.5"/>
+    <text x="54" y="76" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" letter-spacing="4.2" fill="#94a3b8">DRIVEN BY EXCELLENCE</text>
+  </g>
+</svg>
