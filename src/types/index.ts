@@ -44,12 +44,27 @@ export interface Sale {
 
 export interface ActivityLog {
   id: string;
-  userId: string;
+  userId: string | null;
   action: string;
   details: string;
   timestamp: string;
-  targetUserId?: string;
+  targetUserId?: string | null;
   created_at?: string;
+  tableName?: string | null;
+  recordId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  actor?: {
+    id: string;
+    name: string;
+    role: User['role'];
+    avatar_url?: string | null;
+  } | null;
+  target?: {
+    id: string;
+    name: string;
+    role: User['role'];
+    avatar_url?: string | null;
+  } | null;
 }
 
 export interface AuthContextType {
