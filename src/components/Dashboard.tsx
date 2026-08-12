@@ -775,52 +775,54 @@ export const Dashboard: React.FC = () => {
                       <div className="p-4">
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                           {/* Informazioni Principali */}
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-start space-x-3">
-                              <div className="flex-shrink-0">
-                                <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-lg flex items-center justify-center shadow-md">
-                                  <Car className="h-4 w-4 text-white" />
-                                </div>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex min-w-0 flex-wrap items-center gap-2 mb-1">
-                                  <h3 className="min-w-0 text-base font-bold text-gray-900 truncate">{sale.itemName}</h3>
-                                  <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                    Concessionario
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-                                  <span className="flex items-center">
-                                    <span className="w-1 h-1 bg-yellow-400 rounded-full mr-1"></span>
-                                    {new Date(sale.created_at).toLocaleString('it-IT', {
-                                      timeZone: 'Europe/Rome',
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric'
-                                    })} • 
-                                    {new Date(sale.created_at).toLocaleTimeString('it-IT', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
-                                  {sale.carModel && (
-                                    <span className="flex items-center">
-                                      <span className="w-1 h-1 bg-gray-400 rounded-full mr-1"></span>
-                                      {sale.carModel}
-                                    </span>
-                                  )}
-                                  {['owner', 'director'].includes(user?.role || '') && (
-                                    <span className="flex items-center">
-                                      <span className="w-1 h-1 bg-green-400 rounded-full mr-1"></span>
-                                      {sale.employeeName}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Dettagli Finanziari */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 shadow-sm">
+                      <Car className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-extrabold tracking-tight text-gray-900">
+                          {sale.itemName}
+                        </h3>
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          Venduta
+                        </span>
+                      </div>
+
+                      {sale.carModel && sale.carModel.trim().toLowerCase() !== sale.itemName.trim().toLowerCase() && (
+                        <p className="mt-0.5 text-sm font-medium text-gray-500">
+                          {sale.carModel}
+                        </p>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                          {new Date(sale.created_at).toLocaleDateString('it-IT', {
+                            timeZone: 'Europe/Rome',
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          })}
+                          {' · '}
+                          {new Date(sale.created_at).toLocaleTimeString('it-IT', {
+                            timeZone: 'Europe/Rome',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        <span className="hidden h-3 w-px bg-gray-200 sm:block" />
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Venduta da <strong className="font-bold text-gray-700">{sale.employeeName || 'Utente'}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dettagli Finanziari */}
                           <div className="flex flex-wrap items-center gap-4">
                             <div className="text-center">
                               <p className="text-xs text-gray-500 font-medium">Qtà</p>
