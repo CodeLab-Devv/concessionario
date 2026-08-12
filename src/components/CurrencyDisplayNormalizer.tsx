@@ -1,13 +1,14 @@
 import type { FC } from 'react';
 import { useEffect } from 'react';
 
-const CURRENCY_PATTERN = /(?:US\$|USD|€)/g;
+// The application uses the dollar symbol consistently in the UI.
+// This also protects older pages/components that still render EUR/USD text.
+const CURRENCY_PATTERN = /(?:US\$|\bUSD\b|€)/g;
 
 const normalizeTextNode = (node: Text) => {
   const value = node.nodeValue;
-  if (!value || !CURRENCY_PATTERN.test(value)) return;
+  if (!value || !/(?:US\$|\bUSD\b|€)/.test(value)) return;
 
-  CURRENCY_PATTERN.lastIndex = 0;
   node.nodeValue = value.replace(CURRENCY_PATTERN, '$');
 };
 
