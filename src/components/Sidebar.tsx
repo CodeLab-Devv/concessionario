@@ -24,12 +24,12 @@ interface SidebarProps {
   onPageChange: (page: 'dashboard' | 'admin' | 'documents' | 'announcements' | 'shifts' | 'activity') => void;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner',
-  director: 'Direttore',
-  vice_director: 'Vice Direttore',
-  employee: 'Dipendente',
-  probation: 'Prova',
+const ROLE_META: Record<string, { label: string; className: string }> = {
+  owner: { label: 'Proprietario', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+  director: { label: 'Direttore', className: 'border-indigo-200 bg-indigo-50 text-indigo-700' },
+  vice_director: { label: 'Vice Direttore', className: 'border-violet-200 bg-violet-50 text-violet-700' },
+  employee: { label: 'Dipendente', className: 'border-sky-200 bg-sky-50 text-sky-700' },
+  probation: { label: 'In Prova', className: 'border-orange-200 bg-orange-50 text-orange-700' },
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage, onPageChange }) => {
@@ -38,6 +38,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage,
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const roleMeta = ROLE_META[user?.role || ''] ?? {
+    label: 'Utente',
+    className: 'border-slate-200 bg-slate-50 text-slate-600',
+  };
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'director';
   const canAccessActivity = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
   const canAccessAnnouncements = isOnService;
@@ -94,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage,
             <div className={`flex min-w-0 items-center ${isOpen ? 'gap-3' : ''}`}>
               <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 shadow-[0_8px_22px_rgba(245,158,11,0.28)] ring-4 ring-amber-50">
                 <Users className="h-5 w-5 text-white" strokeWidth={2.2} />
-                <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white transition-colors ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               </div>
               {isOpen && <div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">Concessionario</p><h1 className="truncate text-[17px] font-bold tracking-tight text-slate-900">Aurum Motors</h1></div>}
             </div>
@@ -103,8 +107,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, currentPage,
 
           {isOpen && user && (
             <button type="button" onClick={() => setShowProfileModal(true)} className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99]">
-              <div className="relative shrink-0"><Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} /><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} /></div>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{user.name || 'Utente'}</p><p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">{ROLE_LABELS[user.role || ''] || user.role || 'Utente'}</p></div>
+              <div className="relative shrink-0"><Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} /><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white transition-colors ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} /></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{user.name || 'Utente'}</p><span className={`mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${roleMeta.className}`}>{roleMeta.label}</span></div>
               <Settings className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-amber-600" />
             </button>
           )}
