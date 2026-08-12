@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Activity, CalendarDays, ChevronLeft, DollarSign, LayoutDashboard, LogOut, Megaphone, Settings, Users } from 'lucide-react';
+import { Activity, CalendarDays, ChevronLeft, DollarSign, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
 import { useServiceStatus } from '../hooks/useServiceStatus';
 import { ProfileModal } from './modals/ProfileModal';
 import { Avatar } from './Avatar';
@@ -71,13 +71,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
   return (
     <aside className={`safe-area-bottom app-viewport-height fixed inset-y-0 left-0 z-50 flex w-[min(88vw,21rem)] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-[10px_0_40px_rgba(15,23,42,0.10)] transition-[transform,width,box-shadow] duration-300 ease-out lg:relative lg:shadow-none ${isOpen ? 'translate-x-0 lg:w-[18.5rem]' : '-translate-x-full lg:w-[5.5rem] lg:translate-x-0'}`}>
       <div className="safe-area-top border-b border-slate-200/80 bg-gradient-to-b from-white to-slate-50/80 px-3 pb-3 pt-3 sm:px-4">
-        <div className="flex items-center">
-          <div className={`flex min-w-0 items-center ${isOpen ? 'gap-3' : ''}`}>
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 shadow-[0_8px_22px_rgba(245,158,11,0.28)] ring-4 ring-amber-50">
-              <Users className="h-5 w-5 text-white" strokeWidth={2.2} />
-            </div>
-            {isOpen && <div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">Concessionario</p><h1 className="truncate text-[17px] font-bold tracking-tight text-slate-900">Aurum Motors</h1></div>}
-          </div>
+        <div className={`flex items-center ${isOpen ? 'justify-start' : 'justify-center'}`}>
+          <img
+            src={isOpen ? '/aurum-motors-logo.svg' : '/aurum-motors-mark.svg'}
+            alt="Aurum Motors"
+            className={isOpen ? 'h-11 w-auto max-w-[14rem]' : 'h-11 w-11'}
+            draggable={false}
+          />
         </div>
 
         {isOpen && user && (
