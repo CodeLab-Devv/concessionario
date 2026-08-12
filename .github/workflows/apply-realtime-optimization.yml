@@ -1,12 +1,9 @@
 name: apply-realtime-optimization
-
 on:
   push:
     branches: [main]
-
 permissions:
   contents: write
-
 jobs:
   optimize:
     if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'trigger realtime optimizer')
@@ -15,17 +12,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Patch realtime state handling
+      - name: Apply realtime state patches
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
-          def rewrite(path, fn):
-              p=Path(path); s=p.read_text(); n=fn(s)
-              if n==s: raise SystemExit(f'Patch did not change {path}')
-              p.write_text(n)
+          changed=[]
+          def patch(path, fn):
+              p=Path(path)
+              if not p.exists(): return
+              s=p.read_text(); n=fn(s)
+              if n!=s: p.write_text(n); changed.append(path)
+
           Path('src/hooks/useDashboardRealtime.ts').write_text('''import { useCallback } from 'react';\nimport { useRealtimeSubscription, type RealtimePayload } from './useRealtimeSubscription';\ninterface UseDashboardRealtimeOptions { userRole?: string; enabled?: boolean; }\ninterface UserRealtimeRow { id:string; name:string; is_on_service:boolean|null; }\nconst ROLES=new Set(['owner','director','vice_director']);\nexport const useDashboardRealtime=({userRole,enabled=true}:UseDashboardRealtimeOptions)=>{\n const handleSalesChange=useCallback((payload:RealtimePayload)=>window.dispatchEvent(new CustomEvent('dashboardSalesRealtimeChange',{detail:{eventType:payload.eventType,new:payload.new??null,old:payload.old??null}})),[]);\n const handleUsersChange=useCallback((payload:RealtimePayload)=>{const prev=(payload.old||null) as UserRealtimeRow|null;const row=(payload.new||null) as UserRealtimeRow|null;if(payload.eventType==='UPDATE'&&prev&&row&&prev.is_on_service!==row.is_on_service){window.dispatchEvent(new CustomEvent('employeeServiceStatusChanged',{detail:{userId:row.id,userName:row.name,oldStatus:prev.is_on_service,newStatus:row.is_on_service,timestamp:new Date().toISOString()}}));}window.dispatchEvent(new CustomEvent('dashboardUserRealtimeChange',{detail:{eventType:payload.eventType,new:payload.new??null,old:payload.old??null}}));},[]);\n useRealtimeSubscription({table:'sales',onInsert:handleSalesChange,onUpdate:handleSalesChange,onDelete:handleSalesChange,enabled});\n useRealtimeSubscription({table:'users',onInsert:handleUsersChange,onUpdate:handleUsersChange,onDelete:handleUsersChange,enabled:enabled&&ROLES.has(userRole||'')});\n};\n''')
-          def patch_dashboard(s):
+
+          def dash(s):
               if 'dashboardSalesRealtimeChange' in s:return s
               marker="    const handleServiceStatusChange = (event: CustomEvent) => {"
               ins='''    const mapSaleRow=(row:Record<string,any>):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:row.type,category:row.category,created_at:row.created_at||new Date().toISOString()});\n    const handleDashboardSalesRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};setSales(current=>{if(eventType==='INSERT'&&nextRow){const row=mapSaleRow(nextRow);return current.some(item=>item.id===row.id)?current:[row,...current];}if(eventType==='UPDATE'&&nextRow){const row=mapSaleRow(nextRow);return current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?row:item):[row,...current];}if(eventType==='DELETE'&&oldRow?.id)return current.filter(item=>item.id!==String(oldRow.id));return current;});};\n    const handleDashboardUserRealtime=(event:CustomEvent)=>{const {eventType,new:nextRow,old:oldRow}=event.detail||{};if(eventType==='DELETE'&&oldRow?.id){setEmployees(current=>current.filter(employee=>employee.id!==String(oldRow.id)));return;}if(!nextRow?.id||String(nextRow.id)===String(user?.id))return;setEmployees(current=>{const existing=current.find(employee=>employee.id===String(nextRow.id));const mapped:Employee={id:String(nextRow.id),name:String(nextRow.name||''),email:String(nextRow.email||''),role:nextRow.role,employeeType:nextRow.employee_type||undefined,department:'Concessionario',hireDate:String(nextRow.created_at||'').split('T')[0],totalSales:existing?.totalSales||0,isOnService:Boolean(nextRow.is_on_service),lastServiceStatusChange:nextRow.last_service_status_change||undefined,avatar_url:nextRow.avatar_url||undefined};return existing?current.map(employee=>employee.id===mapped.id?mapped:employee):[...current,mapped];});};\n\n'''
@@ -35,43 +36,56 @@ jobs:
               s=re.sub(r"\n  // Real-time subscription integration\n  useDashboardRealtime\(\{.*?\n  \}\);","\n  useDashboardRealtime({userRole:user?.role,enabled:!!user});",s,count=1,flags=re.S)
               s=re.sub(r"\n\s*await fetchSales\(\);","",s)
               return s
-          rewrite('src/components/Dashboard.tsx',patch_dashboard)
-          def patch_activity(s):
+          patch('src/components/Dashboard.tsx',dash)
+
+          def activity(s):
+              if "activity-live" in s:return s
               old=re.search(r"\n  useEffect\(\(\) => \{\n    if \(!isHighRank \|\| !isOnService\) return;.*?\n  \}, \[isHighRank, isOnService, load\]\);",s,re.S)
               if not old:return s
               new='''\n  useEffect(()=>{if(!isHighRank||!isOnService)return;const toSale=(row:Record<string,any>):Sale=>({id:String(row.id),employeeId:String(row.employee_id),employeeName:String(row.employee_name||''),itemName:String(row.item_name||''),carModel:row.car_model??undefined,price:Number(row.price)||0,quantity:Number(row.quantity)||0,total:Number(row.total)||0,date:String(row.date||new Date().toISOString().slice(0,10)),type:'sale',category:'concessionari',discountType:row.discount_type??undefined,created_at:row.created_at||new Date().toISOString()});const channel=supabase.channel('activity-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as Record<string,any>);setSales(current=>current.some(item=>item.id===row.id)?current:[row,...current]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'sales'},payload=>{const row=toSale(payload.new as Record<string,any>);setSales(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?row:item):[row,...current]);}).on('postgres_changes',{event:'DELETE',schema:'public',table:'sales'},payload=>{const id=(payload.old as {id?:string}).id;if(id)setSales(current=>current.filter(item=>item.id!==id));}).on('postgres_changes',{event:'*',schema:'public',table:'users'},payload=>{const row=(payload.new||payload.old) as Record<string,any>;if(!row?.id)return;if(payload.eventType==='DELETE'){setUsers(current=>current.filter(item=>item.id!==row.id));return;}const mapped=row as User;setUsers(current=>current.some(item=>item.id===mapped.id)?current.map(item=>item.id===mapped.id?{...item,...mapped}:item):[...current,mapped]);}).subscribe();return()=>{void supabase.removeChannel(channel);};},[isHighRank,isOnService]);'''
               return s[:old.start()]+new+s[old.end():]
-          rewrite('src/components/ActivityPage.tsx',patch_activity)
-          def patch_admin(s):
-              old=re.search(r"\n  const handleUsersRealtimeChange = useCallback\(async \(\) => \{.*?\n  \}\);\n\n  useRealtimeSubscription\(\{.*?\n  \}\);",s,re.S)
-              if not old:return s
-              new='''\n  const handleUsersRealtimeChange=useCallback((payload:any)=>{const row=(payload.new||payload.old) as Record<string,any>;if(!row?.id)return;setEmployees(current=>{if(payload.eventType==='DELETE')return current.filter(item=>item.id!==row.id);const next:EmployeeRevenue={id:String(row.id),name:String(row.name||''),email:String(row.email||''),role:row.role,revenue:0,commission:getDefaultCommission(row.role),availability:(row.availability&&typeof row.availability==='object'?row.availability:{}) as Availability};const existing=current.find(item=>item.id===next.id);return existing?current.map(item=>item.id===next.id?{...item,...next,revenue:item.revenue}:item):[...current,next];});},[]);\n  const handleSalesRealtimeChange=useCallback((payload:any)=>{const nextRow=payload.new as Record<string,any>|null;const oldRow=payload.old as Record<string,any>|null;const nextEmployeeId=nextRow?.employee_id?String(nextRow.employee_id):null;const oldEmployeeId=oldRow?.employee_id?String(oldRow.employee_id):null;const nextTotal=Number(nextRow?.total)||0;const oldTotal=Number(oldRow?.total)||0;setEmployees(current=>current.map(employee=>{let delta=0;if(payload.eventType==='INSERT'&&employee.id===nextEmployeeId)delta=nextTotal;if(payload.eventType==='DELETE'&&employee.id===oldEmployeeId)delta=-oldTotal;if(payload.eventType==='UPDATE'){if(employee.id===oldEmployeeId)delta-=oldTotal;if(employee.id===nextEmployeeId)delta+=nextTotal;}return delta===0?employee:{...employee,revenue:Math.max(0,employee.revenue+delta)};}));},[]);\n  useRealtimeSubscription({table:'users',onInsert:handleUsersRealtimeChange,onUpdate:handleUsersRealtimeChange,onDelete:handleUsersRealtimeChange,enabled:hasAdminAccess});\n  useRealtimeSubscription({table:'sales',onInsert:handleSalesRealtimeChange,onUpdate:handleSalesRealtimeChange,onDelete:handleSalesRealtimeChange,enabled:hasAdminAccess});'''
-              return s[:old.start()]+new+s[old.end():]
-          rewrite('src/components/AdminPage.tsx',patch_admin)
-          def patch_announcements(s):
+          patch('src/components/ActivityPage.tsx',activity)
+
+          def admin(s):
+              if 'handleSalesRealtimeChange' in s:return s
+              start=s.find('  const handleUsersRealtimeChange')
+              end=s.find('  const handleEditCommission',start)
+              if start<0 or end<0:return s
+              block='''  const handleUsersRealtimeChange=useCallback((payload:any)=>{const row=(payload.new||payload.old) as Record<string,any>;if(!row?.id)return;setEmployees(current=>{if(payload.eventType==='DELETE')return current.filter(item=>item.id!==row.id);const next:EmployeeRevenue={id:String(row.id),name:String(row.name||''),email:String(row.email||''),role:row.role,revenue:0,commission:getDefaultCommission(row.role),availability:(row.availability&&typeof row.availability==='object'?row.availability:{}) as Availability};const existing=current.find(item=>item.id===next.id);return existing?current.map(item=>item.id===next.id?{...item,...next,revenue:item.revenue}:item):[...current,next];});},[]);\n  const handleSalesRealtimeChange=useCallback((payload:any)=>{const n=payload.new as Record<string,any>|null;const o=payload.old as Record<string,any>|null;const ni=n?.employee_id?String(n.employee_id):null;const oi=o?.employee_id?String(o.employee_id):null;const nt=Number(n?.total)||0;const ot=Number(o?.total)||0;setEmployees(current=>current.map(employee=>{let d=0;if(payload.eventType==='INSERT'&&employee.id===ni)d=nt;if(payload.eventType==='DELETE'&&employee.id===oi)d=-ot;if(payload.eventType==='UPDATE'){if(employee.id===oi)d-=ot;if(employee.id===ni)d+=nt;}return d?{...employee,revenue:Math.max(0,employee.revenue+d)}:employee;}));},[]);\n  useRealtimeSubscription({table:'users',onInsert:handleUsersRealtimeChange,onUpdate:handleUsersRealtimeChange,onDelete:handleUsersRealtimeChange,enabled:hasAdminAccess});\n  useRealtimeSubscription({table:'sales',onInsert:handleSalesRealtimeChange,onUpdate:handleSalesRealtimeChange,onDelete:handleSalesRealtimeChange,enabled:hasAdminAccess});\n\n'''
+              return s[:start]+block+s[end:]
+          patch('src/components/AdminPage.tsx',admin)
+
+          def announcements(s):
+              if "read: true" in s and "announcement_reads" in s:return s
               old=re.search(r"\n  useRealtimeSubscription\(\{ table: 'announcements',.*?\n  useRealtimeSubscription\(\{ table: 'announcement_reads',.*?\n",s,re.S)
               if not old:return s
-              new='''\n  useRealtimeSubscription({table:'announcements',onInsert:payload=>{const row=payload.new as Announcement;setAnnouncements(current=>current.some(item=>item.id===row.id)?current:[{...row,read:row.author_id===user?.id},...current]);},onUpdate:payload=>{const row=payload.new as Announcement;setAnnouncements(current=>current.map(item=>item.id===row.id?{...item,...row,author:item.author,read:item.author_id===user?.id||item.read}:item));setSelected(current=>current?.id===row.id?{...current,...row}:current);},onDelete:payload=>{const id=(payload.old as {id?:string}).id;if(!id)return;setAnnouncements(current=>current.filter(item=>item.id!==id));setSelected(current=>current?.id===id?null:current);},enabled:Boolean(user?.id)});\n  useRealtimeSubscription({table:'announcement_reads',onInsert:payload=>{const row=payload.new as {announcement_id?:string;user_id?:string};if(row.user_id!==user?.id||!row.announcement_id)return;setAnnouncements(current=>current.map(item=>item.id===row.announcement_id?{...item,read:true}:item));setSelected(current=>current?.id===row.announcement_id?{...current,read:true}:current);},onUpdate:payload=>{const row=payload.new as {announcement_id?:string;user_id?:string};if(row.user_id!==user?.id||!row.announcement_id)return;setAnnouncements(current=>current.map(item=>item.id===row.announcement_id?{...item,read:true}:item));},onDelete:payload=>{const row=payload.old as {announcement_id?:string;user_id?:string};if(row.user_id!==user?.id||!row.announcement_id)return;setAnnouncements(current=>current.map(item=>item.id===row.announcement_id?{...item,read:false}:item));},enabled:Boolean(user?.id)});\n'''
+              new='''\n  useRealtimeSubscription({table:'announcements',onInsert:payload=>{const row=payload.new as Announcement;setAnnouncements(current=>current.some(item=>item.id===row.id)?current:[{...row,read:row.author_id===user?.id},...current]);},onUpdate:payload=>{const row=payload.new as Announcement;setAnnouncements(current=>current.map(item=>item.id===row.id?{...item,...row,author:item.author,read:item.author_id===user?.id||item.read}:item));setSelected(current=>current?.id===row.id?{...current,...row}:current);},onDelete:payload=>{const id=(payload.old as {id?:string}).id;if(id){setAnnouncements(current=>current.filter(item=>item.id!==id));setSelected(current=>current?.id===id?null:current);}},enabled:Boolean(user?.id)});\n  useRealtimeSubscription({table:'announcement_reads',onInsert:payload=>{const row=payload.new as {announcement_id?:string;user_id?:string};if(row.user_id===user?.id&&row.announcement_id)setAnnouncements(current=>current.map(item=>item.id===row.announcement_id?{...item,read:true}:item));},onDelete:payload=>{const row=payload.old as {announcement_id?:string;user_id?:string};if(row.user_id===user?.id&&row.announcement_id)setAnnouncements(current=>current.map(item=>item.id===row.announcement_id?{...item,read:false}:item));},enabled:Boolean(user?.id)});\n'''
               s=s[:old.start()]+new+s[old.end():]
               s=s.replace("      setTitle(''); setContent(''); setEditing(null); setShowComposer(false); await loadAnnouncements();","      setTitle(''); setContent(''); setEditing(null); setShowComposer(false);",1)
               return s
-          rewrite('src/components/AnnouncementsPage.tsx',patch_announcements)
-          def patch_documents(s):
+          patch('src/components/AnnouncementsPage.tsx',announcements)
+
+          def documents(s):
+              if 'upsertDocumentRealtime' in s:return s
               old=re.search(r"\n  // Callback stabili per la sottoscrizione real-time.*?\n  // Real-time subscription for documents\n  useRealtimeSubscription\(\{.*?\n  \}\);",s,re.S)
               if not old:return s
-              new='''\n  const upsertDocumentRealtime=useCallback(async(payload:RealtimePayload)=>{const raw=payload.new as Document&{vehicle_id?:number|null};if(!raw?.id)return;let vehicle_name=raw.vehicle_name??null;let vehicle_type=raw.vehicle_type??null;if(raw.vehicle_id!=null){const {data:vehicle}=await supabase.from('vehicles').select('name,type').eq('id',raw.vehicle_id).maybeSingle();vehicle_name=vehicle?.name??vehicle_name;vehicle_type=vehicle?.type??vehicle_type;}const row:Document={...raw,vehicle_name,vehicle_type};setDocuments(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?{...item,...row}:item):[row,...current]);documentsCacheRef.current=documentsCacheRef.current.some(item=>item.id===row.id)?documentsCacheRef.current.map(item=>item.id===row.id?{...item,...row}:item):[row,...documentsCacheRef.current];},[]);\n  const handleRealtimeDelete=useCallback((payload:RealtimePayload)=>{const id=(payload.old as {id?:string}).id;if(!id)return;setDocuments(current=>current.filter(item=>item.id!==id));documentsCacheRef.current=documentsCacheRef.current.filter(item=>item.id!==id);},[]);\n  useRealtimeSubscription({table:'documents',enabled:hasAccess,onInsert:upsertDocumentRealtime,onUpdate:upsertDocumentRealtime,onDelete:handleRealtimeDelete});'''
+              new='''\n  const upsertDocumentRealtime=useCallback(async(payload:RealtimePayload)=>{const raw=payload.new as Document&{vehicle_id?:number|null};if(!raw?.id)return;let vehicle_name=raw.vehicle_name??null;let vehicle_type=raw.vehicle_type??null;if(raw.vehicle_id!=null){const {data:vehicle}=await supabase.from('vehicles').select('name,type').eq('id',raw.vehicle_id).maybeSingle();vehicle_name=vehicle?.name??vehicle_name;vehicle_type=vehicle?.type??vehicle_type;}const row:Document={...raw,vehicle_name,vehicle_type};setDocuments(current=>current.some(item=>item.id===row.id)?current.map(item=>item.id===row.id?{...item,...row}:item):[row,...current]);documentsCacheRef.current=documentsCacheRef.current.some(item=>item.id===row.id)?documentsCacheRef.current.map(item=>item.id===row.id?{...item,...row}:item):[row,...documentsCacheRef.current];},[]);\n  const handleRealtimeDelete=useCallback((payload:RealtimePayload)=>{const id=(payload.old as {id?:string}).id;if(!id)return;setDocuments(current=>current.filter(item=>item.id!==id));documentsCacheRef.current=documentsCacheRef.current.filter(item=>item.id!==id);},[]);\n  useRealtimeSubscription({table:'documents',enabled:hasAccess,onInsert:upsertDocumentRealtime,onUpdate:upsertDocumentRealtime,onDelete:handleRealtimeDelete});\n'''
               s=s[:old.start()]+new+s[old.end():]
               s=re.sub(r"\n\s*await fetchDocuments\([^\n]*\);","",s)
               return s
-          rewrite('src/components/DocumentsPage.tsx',patch_documents)
+          patch('src/components/DocumentsPage.tsx',documents)
+
           Path('src/hooks/useGlobalRealtimeRefresh.ts').unlink(missing_ok=True)
+          print('changed:',changed)
           PY
-      - name: Commit
+      - name: Build check
+        run: npm ci --silent && npm run build
+      - name: Commit optimized code and remove one-shot workflow
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           rm -f .github/workflows/apply-realtime-optimization.yml
           git add src .github/workflows/apply-realtime-optimization.yml
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'fix: apply realtime optimization without page refresh'
+          git commit -m 'fix: realtime updates without page refresh'
           git push
