@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { useNotifications } from './ui/NotificationManager';
 
 interface SiteNotification {
@@ -32,7 +31,7 @@ export const GlobalNotifications: React.FC = () => {
     const recipientId = user.id;
 
     const displayNotification = (notification: SiteNotification) => {
-      if (!active || notification.recipient_id !== recipientId) return;
+      if (!active || notification.recipient_id !== recipientId || notification.read_at) return;
       if (handledIds.current.has(notification.id)) return;
 
       handledIds.current.add(notification.id);
@@ -51,15 +50,6 @@ export const GlobalNotifications: React.FC = () => {
         default:
           showWarning(notification.title, message);
       }
-
-      void supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('id', notification.id)
-        .eq('recipient_id', recipientId)
-        .then(({ error }) => {
-          if (error) console.error('Errore marcatura notifica:', error);
-        });
     };
 
     const loadUnread = async () => {
@@ -93,6 +83,19 @@ export const GlobalNotifications: React.FC = () => {
           filter: `recipient_id=eq.${recipientId}`,
         },
         (payload) => displayNotification(payload.new as SiteNotification),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${recipientId}`,
+        },
+        (payload) => {
+          const notification = payload.new as SiteNotification;
+          if (notification.read_at) handledIds.current.delete(notification.id);
+        },
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
