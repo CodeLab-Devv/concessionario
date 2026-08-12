@@ -5,7 +5,6 @@ import {
   Activity,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   Eye,
   FilePlus2,
   FileText,
@@ -14,7 +13,6 @@ import {
   Search,
   ShieldAlert,
   Trash2,
-  UserRound,
   X,
 } from 'lucide-react';
 
