@@ -30,11 +30,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
   const roleMeta = ROLE_META[user?.role || ''] ?? { label: 'Utente', className: 'border-slate-200 bg-slate-50 text-slate-600' };
   const canAccessActivity = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
   const canAccessAnnouncements = isOnService;
+  const canAccessShifts = isOnService;
 
   const menuItems = [
     { id: 'dashboard', label: 'Home', description: 'Panoramica', icon: LayoutDashboard, page: 'dashboard' as const },
     ...(canAccessActivity ? [{ id: 'activity', label: 'Attività', description: 'Registro operativo', icon: Activity, page: 'activity' as const }] : []),
-    { id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const },
+    ...(canAccessShifts ? [{ id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const }] : []),
     ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', description: 'Comunicazioni del team', icon: Megaphone, page: 'announcements' as const }] : []),
   ];
 

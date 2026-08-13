@@ -198,6 +198,19 @@ export const ShiftsPage: React.FC = () => {
   } = useNotifications();
 
   const canManage = HIGH_ROLES.has(user?.role ?? '');
+  const isOnService = Boolean(user?.isOnService);
+
+  if (!isOnService) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center px-4">
+        <div className="max-w-md rounded-3xl border border-amber-200 bg-white p-10 text-center shadow-xl shadow-amber-100/50">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50"><CalendarDays className="h-8 w-8 text-amber-500" /></div>
+          <h3 className="text-xl font-bold text-gray-900">Non sei in servizio</h3>
+          <p className="mt-2 text-sm leading-6 text-gray-500">Metti lo stato in servizio per visualizzare e gestire i turni.</p>
+        </div>
+      </div>
+    );
+  }
 
   const [selectedDate, setSelectedDate] = useState(() =>
     formatDate(new Date()),
