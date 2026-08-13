@@ -15,29 +15,101 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
       - name: Patch UI
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('src/components/ShiftsPage.tsx')
-          text = path.read_text()
+          text = path.read_text(encoding='utf-8')
 
-          old_desktop = '''{rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                          <div className="mt-2 text-xs text-gray-600">\n                            <span className="font-semibold">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}\n                          </div>\n                        )}'''
-          new_desktop = '''{rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                          <div className="mt-3 flex max-w-[260px] items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5">\n                            <Avatar\n                              src={userMap.get(rows[0].supervisor_id)?.avatar_url ?? undefined}\n                              alt={userMap.get(rows[0].supervisor_id)?.name ?? 'Supervisore'}\n                              size="sm"\n                              fallbackText={userMap.get(rows[0].supervisor_id)?.name ?? 'S'}\n                            />\n                            <div className="min-w-0 flex-1">\n                              <div className="flex items-center gap-2">\n                                <p className="truncate text-xs font-bold text-gray-900">{userMap.get(rows[0].supervisor_id)?.name}</p>\n                                <span className="shrink-0 rounded-full bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">Supervisore</span>\n                              </div>\n                              <p className="truncate text-[10px] text-gray-500">{ROLE_LABELS[userMap.get(rows[0].supervisor_id)?.role ?? ''] ?? userMap.get(rows[0].supervisor_id)?.role}</p>\n                            </div>\n                          </div>\n                        )}'''
+          desktop = r'''\{supervisor && \(.*?\n\s*</div>\n\s*\)}'''
+          desktop_replacement = '''{supervisor && (
+                            <div className="mt-3 flex max-w-[280px] items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5">
+                              <Avatar
+                                src={supervisor.avatar_url ?? undefined}
+                                alt={supervisor.name}
+                                size="sm"
+                                fallbackText={supervisor.name}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <p className="truncate text-xs font-bold text-gray-900">
+                                    {supervisor.name}
+                                  </p>
+                                  <span className="shrink-0 rounded-full bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">
+                                    Supervisore
+                                  </span>
+                                </div>
+                                <p className="truncate text-[10px] text-gray-500">
+                                  {ROLE_LABELS[supervisor.role] ?? supervisor.role}
+                                </p>
+                              </div>
+                            </div>
+                          )}'''
 
-          old_mobile = '''{rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">\n                      <span className="font-semibold">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}\n                    </div>\n                  )}'''
-          new_mobile = '''{rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5">\n                      <Avatar\n                        src={userMap.get(rows[0].supervisor_id)?.avatar_url ?? undefined}\n                        alt={userMap.get(rows[0].supervisor_id)?.name ?? 'Supervisore'}\n                        size="sm"\n                        fallbackText={userMap.get(rows[0].supervisor_id)?.name ?? 'S'}\n                      />\n                      <div className="min-w-0 flex-1">\n                        <div className="flex items-center gap-2">\n                          <p className="truncate text-xs font-bold text-gray-900">{userMap.get(rows[0].supervisor_id)?.name}</p>\n                          <span className="shrink-0 rounded-full bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">Supervisore</span>\n                        </div>\n                        <p className="truncate text-[10px] text-gray-500">{ROLE_LABELS[userMap.get(rows[0].supervisor_id)?.role ?? ''] ?? userMap.get(rows[0].supervisor_id)?.role}</p>\n                      </div>\n                    </div>\n                  )}'''
+          # Replace only the old simple desktop supervisor block.
+          old_desktop = re.compile(
+              r'''\{supervisor && \(\s*<div className="mt-2 text-xs text-gray-600">\s*<span className="font-semibold">Supervisore:</span> \{supervisor\.name\}\s*</div>\s*\)\}''',
+              re.MULTILINE,
+          )
 
-          if old_desktop not in text or old_mobile not in text:
-              raise SystemExit('Supervisor UI markers not found')
-          text = text.replace(old_desktop, new_desktop, 1)
-          text = text.replace(old_mobile, new_mobile, 1)
-          path.write_text(text)
+          # Replace only the old mobile supervisor block.
+          old_mobile = re.compile(
+              r'''\{supervisor && \(\s*<div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">\s*<span className="font-semibold">Supervisore:</span> \{supervisor\.name\}\s*</div>\s*\)\}''',
+              re.MULTILINE,
+          )
+
+          changed = False
+
+          if old_desktop.search(text):
+              text = old_desktop.sub(desktop_replacement, text, count=1)
+              changed = True
+
+          if old_mobile.search(text):
+              mobile_replacement = '''{supervisor && (
+                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5">
+                      <Avatar
+                        src={supervisor.avatar_url ?? undefined}
+                        alt={supervisor.name}
+                        size="sm"
+                        fallbackText={supervisor.name}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-xs font-bold text-gray-900">
+                            {supervisor.name}
+                          </p>
+                          <span className="shrink-0 rounded-full bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">
+                            Supervisore
+                          </span>
+                        </div>
+                        <p className="truncate text-[10px] text-gray-500">
+                          {ROLE_LABELS[supervisor.role] ?? supervisor.role}
+                        </p>
+                      </div>
+                    </div>
+                  )}'''
+              text = old_mobile.sub(mobile_replacement, text, count=1)
+              changed = True
+
+          if not changed:
+              print('Supervisor UI already updated; nothing to patch.')
+          else:
+              path.write_text(text, encoding='utf-8')
+              print('Supervisor UI updated successfully.')
           PY
+
       - name: Commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/components/ShiftsPage.tsx
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
           git commit -m 'ui: improve shift supervisor card'
           git push
