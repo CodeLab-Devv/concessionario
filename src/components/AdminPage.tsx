@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import type { PresenceStatus } from '../types';
 
 type AdminRealtimeRow = Record<string, unknown> & {
   id?: string; name?: string; email?: string; role?: string; employee_id?: string; total?: number | string; availability?: unknown;
+  presence_status?: string | null; avatar_url?: string | null;
 };
 
 import { supabase } from '../lib/supabase';
 import { useRealtimeSubscription, type RealtimePayload } from '../hooks/useRealtimeSubscription';
 import { useDialogs } from './ui/DialogManager';
+import { Avatar } from './Avatar';
 import {
   DollarSign,
   Users,
@@ -39,6 +42,8 @@ interface EmployeeRevenue {
   revenue: number;
   commission: number;
   availability: Availability;
+  presenceStatus: PresenceStatus;
+  avatar_url?: string | null;
 }
 
 const WEEKDAYS: Array<{ key: string; label: string }> = [
@@ -50,6 +55,15 @@ const WEEKDAYS: Array<{ key: string; label: string }> = [
   { key: 'saturday', label: 'Sab' },
   { key: 'sunday', label: 'Dom' }
 ];
+
+const PRESENCE_META: Record<PresenceStatus, { label: string; dot: string }> = {
+  available: { label: 'Disponibile', dot: 'bg-emerald-500' },
+  inactive: { label: 'Inattivo', dot: 'bg-orange-500' },
+  busy: { label: 'Occupato', dot: 'bg-red-500' },
+};
+
+const normalizePresence = (status?: string | null): PresenceStatus =>
+  status === 'available' || status === 'busy' ? status : 'inactive';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('it-IT', {
@@ -130,7 +144,9 @@ export const AdminPage: React.FC = () => {
         role: emp.role,
         revenue: revenueByEmployee.get(emp.id) || 0,
         commission: getDefaultCommission(emp.role),
-        availability: (emp.availability && typeof emp.availability === 'object' ? emp.availability : {}) as Availability
+        availability: (emp.availability && typeof emp.availability === 'object' ? emp.availability : {}) as Availability,
+        presenceStatus: normalizePresence(emp.presence_status),
+        avatar_url: emp.avatar_url || null,
       }));
 
       setEmployees(employeesWithRevenue);
@@ -146,10 +162,69 @@ export const AdminPage: React.FC = () => {
     void fetchEmployeesRevenue();
   }, [fetchEmployeesRevenue]);
 
-  const handleUsersRealtimeChange=useCallback((payload: RealtimePayload)=>{const row=(payload.new||payload.old) as AdminRealtimeRow;if(!row?.id)return;setEmployees(current=>{if(payload.eventType==='DELETE')return current.filter(item=>item.id!==row.id);const next:EmployeeRevenue={id:String(row.id),name:String(row.name||''),email:String(row.email||''),role: String(row.role || ''),revenue:0,commission:getDefaultCommission(String(row.role || '')),availability:(row.availability&&typeof row.availability==='object'?row.availability:{}) as Availability};const existing=current.find(item=>item.id===next.id);return existing?current.map(item=>item.id===next.id?{...item,...next,revenue:item.revenue}:item):[...current,next];});},[]);
-  const handleSalesRealtimeChange=useCallback((payload: RealtimePayload)=>{const n=payload.new as AdminRealtimeRow|null;const o=payload.old as AdminRealtimeRow|null;const ni=n?.employee_id?String(n.employee_id):null;const oi=o?.employee_id?String(o.employee_id):null;const nt=Number(n?.total)||0;const ot=Number(o?.total)||0;setEmployees(current=>current.map(employee=>{let d=0;if(payload.eventType==='INSERT'&&employee.id===ni)d=nt;if(payload.eventType==='DELETE'&&employee.id===oi)d=-ot;if(payload.eventType==='UPDATE'){if(employee.id===oi)d-=ot;if(employee.id===ni)d+=nt;}return d?{...employee,revenue:Math.max(0,employee.revenue+d)}:employee;}));},[]);
-  useRealtimeSubscription({table:'users',onInsert:handleUsersRealtimeChange,onUpdate:handleUsersRealtimeChange,onDelete:handleUsersRealtimeChange,enabled:hasAdminAccess});
-  useRealtimeSubscription({table:'sales',onInsert:handleSalesRealtimeChange,onUpdate:handleSalesRealtimeChange,onDelete:handleSalesRealtimeChange,enabled:hasAdminAccess});
+  const handleUsersRealtimeChange = useCallback((payload: RealtimePayload) => {
+    const row = (payload.new || payload.old) as AdminRealtimeRow;
+    if (!row?.id) return;
+
+    setEmployees(current => {
+      if (payload.eventType === 'DELETE') return current.filter(item => item.id !== row.id);
+
+      const next: Partial<EmployeeRevenue> & Pick<EmployeeRevenue, 'id' | 'name' | 'email' | 'role' | 'presenceStatus' | 'availability'> = {
+        id: String(row.id),
+        name: String(row.name || ''),
+        email: String(row.email || ''),
+        role: String(row.role || 'employee') as EmployeeRevenue['role'],
+        availability: (row.availability && typeof row.availability === 'object' ? row.availability : {}) as Availability,
+        presenceStatus: normalizePresence(row.presence_status),
+        avatar_url: row.avatar_url || null,
+      };
+
+      const existing = current.find(item => item.id === next.id);
+      if (!existing) {
+        return [...current, {
+          id: next.id,
+          name: next.name,
+          email: next.email,
+          role: next.role,
+          revenue: 0,
+          commission: getDefaultCommission(next.role),
+          availability: next.availability,
+          presenceStatus: next.presenceStatus,
+          avatar_url: next.avatar_url,
+        }];
+      }
+
+      return current.map(item => item.id === next.id ? {
+        ...item,
+        ...next,
+        revenue: item.revenue,
+        commission: item.commission,
+      } : item);
+    });
+  }, []);
+
+  const handleSalesRealtimeChange = useCallback((payload: RealtimePayload) => {
+    const n = payload.new as AdminRealtimeRow | null;
+    const o = payload.old as AdminRealtimeRow | null;
+    const ni = n?.employee_id ? String(n.employee_id) : null;
+    const oi = o?.employee_id ? String(o.employee_id) : null;
+    const nt = Number(n?.total) || 0;
+    const ot = Number(o?.total) || 0;
+
+    setEmployees(current => current.map(employee => {
+      let d = 0;
+      if (payload.eventType === 'INSERT' && employee.id === ni) d = nt;
+      if (payload.eventType === 'DELETE' && employee.id === oi) d = -ot;
+      if (payload.eventType === 'UPDATE') {
+        if (employee.id === oi) d -= ot;
+        if (employee.id === ni) d += nt;
+      }
+      return d ? { ...employee, revenue: Math.max(0, employee.revenue + d) } : employee;
+    }));
+  }, []);
+
+  useRealtimeSubscription({ table: 'users', onInsert: handleUsersRealtimeChange, onUpdate: handleUsersRealtimeChange, onDelete: handleUsersRealtimeChange, enabled: hasAdminAccess });
+  useRealtimeSubscription({ table: 'sales', onInsert: handleSalesRealtimeChange, onUpdate: handleSalesRealtimeChange, onDelete: handleSalesRealtimeChange, enabled: hasAdminAccess });
 
   const handleEditCommission = (employeeId: string, currentCommission: number) => {
     setEditingCommission(employeeId);
@@ -197,7 +272,7 @@ export const AdminPage: React.FC = () => {
     if (!resetAllData) {
       await showConfirm({
         title: 'Errore',
-        message: 'Funzione di reset non disponibile. Contattare l\'amministratore.',
+        message: "Funzione di reset non disponibile. Contattare l'amministratore.",
         confirmText: 'OK'
       });
       return;
@@ -299,9 +374,26 @@ export const AdminPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {employees.map(employee => {
                   const schedule = formatAvailability(employee.availability);
+                  const presence = PRESENCE_META[employee.presenceStatus];
                   return (
                     <tr key={employee.id} className="hover:bg-gray-50">
-                      <td className="px-3 sm:px-6 py-4"><div className="min-w-0"><div className="text-sm font-medium text-gray-900 truncate">{employee.name}</div><div className="text-xs sm:text-sm text-gray-500 truncate">{employee.email}</div><div className="sm:hidden mt-1 flex items-center space-x-1">{getRoleIcon(employee.role)}<span className="text-xs text-gray-600">{getRoleLabel(employee.role)}</span></div></div></td>
+                      <td className="px-3 sm:px-6 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="relative shrink-0">
+                            <Avatar src={employee.avatar_url ?? undefined} alt={employee.name} size="sm" fallbackText={employee.name || 'U'} />
+                            <span title={presence.label} className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${presence.dot}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium text-gray-900 truncate">{employee.name}</div>
+                              <span className={`hidden rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:inline-flex ${employee.presenceStatus === 'available' ? 'bg-emerald-50 text-emerald-700' : employee.presenceStatus === 'busy' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'}`}>{presence.label}</span>
+                            </div>
+                            <div className="text-xs sm:text-sm text-gray-500 truncate">{employee.email}</div>
+                            <div className="mt-1 flex items-center gap-1 sm:hidden"><span className={`h-2 w-2 rounded-full ${presence.dot}`} /><span className="text-[10px] font-semibold text-gray-500">{presence.label}</span></div>
+                            <div className="sm:hidden mt-1 flex items-center space-x-1">{getRoleIcon(employee.role)}<span className="text-xs text-gray-600">{getRoleLabel(employee.role)}</span></div>
+                          </div>
+                        </div>
+                      </td>
                       <td className="hidden sm:table-cell px-3 sm:px-6 py-4"><div className="flex items-center space-x-2">{getRoleIcon(employee.role)}<div><div className="text-sm font-medium text-gray-900">{getRoleLabel(employee.role)}</div><div className="text-sm text-gray-500">Concessionario</div></div></div></td>
                       <td className="px-3 sm:px-6 py-4"><div className="min-w-[180px]">{schedule.length ? <div className="space-y-1">{schedule.map(day => <div key={day} className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-700"><Clock className="h-3.5 w-3.5 text-amber-600" />{day}</div>)}</div> : <span className="text-xs sm:text-sm text-gray-400">Non impostata</span>}</div></td>
                       <td className="px-3 sm:px-6 py-4"><div className="text-sm font-bold text-gray-900">{formatCurrency(employee.revenue)}</div></td>
