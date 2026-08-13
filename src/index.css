@@ -171,6 +171,46 @@ body { background-color: #ffffff; color: #000000; }
   display: none !important;
 }
 
+/* Artwork automotive della sezione Vendite Recenti. */
+section[aria-labelledby='recent-sales-title'] article {
+  position: relative;
+  isolation: isolate;
+}
+
+section[aria-labelledby='recent-sales-title'] article::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  right: -1.5rem;
+  bottom: -1.5rem;
+  width: min(48%, 30rem);
+  aspect-ratio: 3 / 1;
+  background: url('/images/aurum-recent-sale-car.webp') center / contain no-repeat;
+  opacity: 0.14;
+  pointer-events: none;
+  filter: saturate(1.05) contrast(1.05);
+  transform: translate3d(0, 0, 0);
+  transition: opacity 250ms ease, transform 350ms ease;
+}
+
+section[aria-labelledby='recent-sales-title'] article:hover::after {
+  opacity: 0.22;
+  transform: translate3d(-0.35rem, -0.15rem, 0) scale(1.015);
+}
+
+@media (max-width: 639px) {
+  section[aria-labelledby='recent-sales-title'] article::after {
+    right: -2rem;
+    bottom: -1.25rem;
+    width: 70%;
+    opacity: 0.10;
+  }
+
+  section[aria-labelledby='recent-sales-title'] article:hover::after {
+    opacity: 0.13;
+  }
+}
+
 @media (max-width: 639px) {
   table {
     width: 100% !important;
