@@ -12,59 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch profile email flow
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/components/modals/ProfileModal.tsx')
-          s = p.read_text()
-          old = '''      if (email !== user.email.toLowerCase()) {
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-          throw new Error('Inserisci un indirizzo email valido.');
-        }
-
-        const { error: emailError } = await supabase.auth.updateUser({ email });
-        if (emailError) throw new Error(`Impossibile cambiare email: ${emailError.message}`);
-        showSuccess('Email aggiornata', 'Il nuovo indirizzo email è stato salvato.');
-      }
-'''
-          new = '''      const changedEmail = email !== user.email.toLowerCase();
-      let emailChanged = false;
-
-      if (changedEmail) {
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-          throw new Error('Inserisci un indirizzo email valido.');
-        }
-
-        const { data, error: emailError } = await supabase.functions.invoke('update-own-email', {
-          body: { email },
-        });
-
-        if (emailError) throw new Error(`Impossibile cambiare email: ${emailError.message}`);
-        if (!data?.success) throw new Error(data?.error || 'Impossibile cambiare email.');
-        emailChanged = true;
-      }
-'''
-          if old not in s:
-              print('Email block already patched or source changed; nothing to do.')
-          else:
-              s = s.replace(old, new, 1)
-              s = s.replace("      const changedEmail = email !== user.email.toLowerCase();\n      const changedPassword = Boolean(formData.newPassword);", "      const changedPassword = Boolean(formData.newPassword);", 1)
-              s = s.replace("      if (!changedProfile && !changedEmail && !changedPassword) {", "      if (!changedProfile && !emailChanged && !changedPassword) {", 1)
-              s = s.replace("        email: email || user.email,", "        email: emailChanged ? email : email || user.email,", 1)
-              s = s.replace("      showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');", "      showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');", 1)
-              p.write_text(s)
-          PY
-      - name: Remove temporary workflow
-        run: rm -f .github/workflows/fix-immediate-email-change.yml
+      - name: Apply email patch
+        run: python3 scripts/patch_profile_email.py
+      - name: Remove temporary patch files
+        run: rm -f .github/workflows/fix-immediate-email-change.yml scripts/patch_profile_email.py
       - name: Commit patch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if git diff --quiet; then
+          git add src/components/modals/ProfileModal.tsx .github/workflows/fix-immediate-email-change.yml scripts/patch_profile_email.py
+          if git diff --cached --quiet; then
             echo 'No changes detected.'
             exit 0
           fi
-          git add src/components/modals/ProfileModal.tsx .github/workflows/fix-immediate-email-change.yml
           git commit -m 'fix(profile): make email changes immediate'
           git push
