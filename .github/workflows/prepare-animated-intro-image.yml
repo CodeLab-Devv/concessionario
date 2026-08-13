@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/components/AnimatedIntro.tsx'
-      - 'public/images/aurum-recent-sale-car.webp'
+      - 'public/images/.intro-car-payload/READY'
       - '.github/workflows/prepare-animated-intro-image.yml'
 
 permissions:
@@ -13,64 +13,50 @@ permissions:
 
 jobs:
   prepare-image:
+    if: ${{ hashFiles('public/images/.intro-car-payload/*.b64') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Convert generated artwork to a real PNG
+      - name: Restore generated PNG
         shell: bash
         run: |
-          if [ -f public/images/animated-intro-car.png ]; then
-            echo "AnimatedIntro PNG already exists."
-            exit 0
-          fi
-
           python -m pip install --disable-pip-version-check --quiet Pillow
           python - <<'PY'
           from base64 import b64decode
           from pathlib import Path
           from PIL import Image
 
-          source = Path('public/images/aurum-recent-sale-car.webp')
+          payload_dir = Path('public/images/.intro-car-payload')
+          parts = sorted(payload_dir.glob('part-*.b64'))
+          if not parts:
+              raise SystemExit('AnimatedIntro image payload is missing.')
+
+          encoded = b''.join(part.read_bytes().strip() for part in parts)
+          raw = b64decode(encoded, validate=True)
+
+          source = Path('/tmp/animated-intro.png')
           target = Path('public/images/animated-intro-car.png')
-          decoded = Path('/tmp/animated-intro-source.webp')
+          source.write_bytes(raw)
 
-          if not source.exists():
-              raise SystemExit(f'Missing source artwork: {source}')
+          with Image.open(source) as image:
+              image = image.convert('RGBA')
+              image.save(target, format='PNG', optimize=True)
+              image.verify()
 
-          raw = source.read_bytes()
-
-          # The existing generated artwork was committed as base64 text instead of binary.
-          # Decode it before Pillow reads it, without touching the Recent Sales component.
-          if raw.startswith(b'RIFF'):
-              decoded.write_bytes(raw)
-          else:
-              try:
-                  decoded.write_bytes(b64decode(b''.join(raw.split()), validate=True))
-              except Exception as exc:
-                  raise SystemExit(f'Unable to decode existing artwork: {exc}') from exc
-
-          image = Image.open(decoded).convert('RGBA')
-          image.thumbnail((1200, 400), Image.Resampling.LANCZOS)
-
-          alpha = image.getchannel('A')
-          rgb = image.convert('RGB').quantize(colors=256, method=Image.Quantize.MEDIANCUT).convert('RGB')
-          output = Image.merge('RGBA', (*rgb.split(), alpha))
-          output.save(target, format='PNG', optimize=True)
-          print(f'Created {target} at {output.size[0]}x{output.size[1]}')
+          print(f'Created {target} ({target.stat().st_size} bytes)')
           PY
 
-      - name: Commit PNG asset
+      - name: Finalize one-shot asset migration
         shell: bash
         run: |
-          if git diff --quiet -- public/images/animated-intro-car.png; then
-            echo "No new PNG to commit."
-            exit 0
-          fi
+          rm -rf public/images/.intro-car-payload
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/images/animated-intro-car.png
-          git commit -m 'chore: add real PNG artwork for AnimatedIntro'
+          git add -A public/images/.intro-car-payload
+          git rm -f .github/workflows/prepare-animated-intro-image.yml
+          git commit -m 'feat: add generated car artwork for AnimatedIntro'
           git push
