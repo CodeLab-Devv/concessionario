@@ -45,3 +45,5 @@ npm run build
 ```
 
 Prima di distribuire, rimuovi manualmente da Supabase eventuali account storici che non devono più avere accesso.
+
+<!-- deploy trigger: restored main application state -->
