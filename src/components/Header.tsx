@@ -67,7 +67,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85">
+    <header className="border-b border-slate-200 bg-white/95 shadow-sm">
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-8">
         <div className="flex min-h-16 items-center justify-between gap-3 py-2">
           <div className="min-w-0">
