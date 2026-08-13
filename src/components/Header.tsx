@@ -7,10 +7,8 @@ import type { PresenceStatus } from '../types';
 
 const PRESENCE_META: Record<PresenceStatus, { label: string; dot: string; bg: string; text: string }> = {
   available: { label: 'Disponibile', dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-800' },
-  inactive: { label: 'Inattivo', dot: 'bg-slate-400', bg: 'bg-slate-50', text: 'text-slate-700' },
-  busy: { label: 'Occupato', dot: 'bg-amber-500', bg: 'bg-amber-50', text: 'text-amber-800' },
-  dnd: { label: 'Non disturbare', dot: 'bg-rose-500', bg: 'bg-rose-50', text: 'text-rose-800' },
-  absent: { label: 'Assente', dot: 'bg-violet-500', bg: 'bg-violet-50', text: 'text-violet-800' },
+  inactive: { label: 'Inattivo', dot: 'bg-orange-500', bg: 'bg-orange-50', text: 'text-orange-800' },
+  busy: { label: 'Occupato', dot: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-800' },
 };
 
 export const Header: React.FC = () => {
