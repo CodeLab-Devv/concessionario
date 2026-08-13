@@ -37,6 +37,34 @@ jobs:
               },
           }
 
+          role_path = Path('src/context/AuthContext.tsx')
+          role_text = role_path.read_text()
+          old_role_block = """      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (error) throw error;
+"""
+          new_role_block = """      const { data: updatedRoleRow, error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId)
+        .select('id, role')
+        .single();
+
+      if (error) throw error;
+      if (!updatedRoleRow || updatedRoleRow.role !== newRole) {
+        throw new Error('Il nuovo ruolo non è stato persistito nel database.');
+      }
+
+      setEmployees(prev => prev.map(emp =>
+        emp.id === userId ? { ...emp, role: newRole } : emp
+      ));
+"""
+          if old_role_block in role_text:
+              role_path.write_text(role_text.replace(old_role_block, new_role_block, 1))
+
           for filename, mapping in replacements.items():
               path = Path(filename)
               text = path.read_text()
@@ -48,6 +76,8 @@ jobs:
               '.github/workflows/fix-lint-realtime-types.yml',
               '.github/workflows/fix-admin-unused.yml',
               '.github/workflows/fix-final-lint.yml',
+              '.github/workflows/fix-role-save.yml',
+              '.github/workflows/fix-role-persistence.yml',
           ]:
               Path(path).unlink(missing_ok=True)
           PY
