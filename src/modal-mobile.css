@@ -14,15 +14,21 @@
 }
 
 /*
- * MainLayout places pages inside an overflow-auto viewport below the Header.
- * A fixed descendant rendered inside that scrolling container can be clipped
- * to the content area, which makes the modal appear underneath the Header.
- * While a modal is open, let the page viewport overflow so the fixed overlay
- * can cover the entire application viewport, including the Header area.
+ * MainLayout renders pages inside an overflow-auto viewport below Header.
+ * A fixed modal rendered from that subtree can otherwise be clipped before it
+ * reaches the header. When a dialog is open, release that clipping container.
  */
 body:has(.safe-area-overlay) .app-viewport-height > .relative.flex.flex-1.flex-col.overflow-hidden > .min-w-0.flex-1.overflow-auto,
 body:has([role='dialog']) .app-viewport-height > .relative.flex.flex-1.flex-col.overflow-hidden > .min-w-0.flex-1.overflow-auto {
   overflow: visible !important;
+}
+
+/* Keep header actions and mobile navigation triggers below every modal. */
+body:has(.safe-area-overlay) .notification-bell-root,
+body:has([role='dialog']) .notification-bell-root,
+body:has(.safe-area-overlay) .app-viewport-height > .relative.flex.flex-1.flex-col.overflow-hidden > button,
+body:has([role='dialog']) .app-viewport-height > .relative.flex.flex-1.flex-col.overflow-hidden > button {
+  z-index: 1 !important;
 }
 
 .safe-area-overlay > .modal-shell,
