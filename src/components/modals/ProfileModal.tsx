@@ -130,25 +130,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (availability !== (user.availability || '')) updates.availability = availability;
 
       const changedEmail = email !== user.email.toLowerCase();
-      let emailChangeRequested = false;
+      let emailChanged = false;
 
       if (changedEmail) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new Error('Inserisci un indirizzo email valido.');
         }
 
-        const { error: emailError } = await supabase.auth.updateUser({
-          email,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
+        const { data, error: emailError } = await supabase.functions.invoke('update-own-email', {
+          body: { email },
         });
 
         if (emailError) {
           throw new Error(`Impossibile cambiare email: ${emailError.message}`);
         }
 
-        emailChangeRequested = true;
+        if (!data?.success) {
+          throw new Error(data?.error || 'Impossibile cambiare email.');
+        }
+
+        emailChanged = true;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -181,7 +182,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       const changedProfile = Object.keys(updates).length > 0;
       const changedPassword = Boolean(formData.newPassword);
 
-      if (!changedProfile && !emailChangeRequested && !changedPassword) {
+      if (!changedProfile && !emailChanged && !changedPassword) {
         showError('Nessuna modifica', 'Non sono state rilevate modifiche da salvare.');
         return;
       }
@@ -189,20 +190,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       await refreshUserProfile?.();
       setFormData(prev => ({
         ...prev,
-        email: emailChangeRequested ? user.email : email,
+        email: emailChanged ? email : email || user.email,
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       }));
 
-      if (emailChangeRequested) {
-        showSuccess(
-          'Conferma richiesta',
-          `Abbiamo inviato una email di conferma a ${email}. L'indirizzo verrà cambiato dopo la conferma.`,
-        );
-      } else {
-        showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
-      }
+      showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
     } catch (error) {
       console.error('Profile update error:', error);
       showError('Errore aggiornamento', error instanceof Error ? error.message : 'Errore imprevisto.');
