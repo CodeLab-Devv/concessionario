@@ -25,10 +25,6 @@ body {
   height: 100dvh;
 }
 
-/*
- * Modali: devono sempre stare sopra alla barra di navigazione/header.
- * In particolare su iOS/Android alcuni header hanno stacking context propri.
- */
 .safe-area-overlay {
   position: fixed;
   z-index: 9990 !important;
@@ -60,7 +56,6 @@ body {
   }
 }
 
-/* Animazioni personalizzate per Aurum Motors Concessionario */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -171,7 +166,11 @@ body {
 
 body { background-color: #ffffff; color: #000000; }
 
-/* Tabelle responsive: su smartphone niente scroll orizzontale per classifica/stipendi. */
+/* Rimuove esclusivamente l'indicatore grafico della vendita più recente. */
+[title='Vendita più recente'] {
+  display: none !important;
+}
+
 @media (max-width: 639px) {
   table {
     width: 100% !important;
