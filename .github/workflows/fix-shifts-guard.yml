@@ -1,0 +1,33 @@
+name: fix shifts guard
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move shifts service guard below hooks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ShiftsPage.tsx')
+          s = p.read_text()
+          guard = "  if (!isOnService) {\n    return (\n      <div className=\"flex min-h-[520px] items-center justify-center px-4\">\n        <div className=\"max-w-md rounded-3xl border border-amber-200 bg-white p-10 text-center shadow-xl shadow-amber-100/50\">\n          <div className=\"mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50\"><CalendarDays className=\"h-8 w-8 text-amber-500\" /></div>\n          <h3 className=\"text-xl font-bold text-gray-900\">Non sei in servizio</h3>\n          <p className=\"mt-2 text-sm leading-6 text-gray-500\">Metti lo stato in servizio per visualizzare e gestire i turni.</p>\n        </div>\n      </div>\n    );\n  }\n\n"
+          s = s.replace(guard, '', 1)
+          anchor = "  return (\n    <div className=\"mx-auto w-full max-w-7xl space-y-5 pb-8\">"
+          if anchor not in s:
+              raise SystemExit('Render anchor not found')
+          s = s.replace(anchor, guard + anchor, 1)
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ShiftsPage.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(shifts): keep service guard hook-safe'
+          git push
