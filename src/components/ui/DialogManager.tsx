@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ConfirmDialog, ConfirmDialogProps } from './ConfirmDialog';
 
 interface DialogContextType {
@@ -84,14 +85,16 @@ export const DialogProvider: React.FC<DialogProviderProps> = ({ children }) => {
   return (
     <DialogContext.Provider value={value}>
       {children}
-      
-      {dialog && (
-        <ConfirmDialog
-          {...dialog}
-          isOpen={dialog.isOpen}
-          onClose={handleClose}
-          onConfirm={handleConfirm}
-        />
+      {dialog && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999]" style={{ isolation: 'isolate' }}>
+          <ConfirmDialog
+            {...dialog}
+            isOpen={dialog.isOpen}
+            onClose={handleClose}
+            onConfirm={handleConfirm}
+          />
+        </div>,
+        document.body,
       )}
     </DialogContext.Provider>
   );
