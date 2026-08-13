@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Activity, CalendarDays, ChevronLeft, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
+import { Activity, CalendarDays, ChevronDown, ChevronLeft, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
 import { useServiceStatus } from '../hooks/useServiceStatus';
 import { ProfileModal } from './modals/ProfileModal';
 import { Avatar } from './Avatar';
 import { supabase } from '../lib/supabase';
+import type { PresenceStatus } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,13 +22,26 @@ const ROLE_META: Record<string, { label: string; className: string }> = {
   probation: { label: 'In Prova', className: 'border-orange-200 bg-orange-50 text-orange-700' },
 };
 
+const PRESENCE_META: Record<PresenceStatus, { label: string; dot: string; activeBg: string }> = {
+  available: { label: 'Disponibile', dot: 'bg-emerald-500', activeBg: 'bg-emerald-50' },
+  inactive: { label: 'Inattivo', dot: 'bg-orange-500', activeBg: 'bg-orange-50' },
+  busy: { label: 'Occupato', dot: 'bg-red-500', activeBg: 'bg-red-50' },
+};
+
+const normalizePresence = (status?: PresenceStatus | null): PresenceStatus =>
+  status === 'available' || status === 'busy' ? status : 'inactive';
+
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageChange }) => {
-  const { user } = useAuth();
+  const { user, setPresenceStatus } = useAuth();
   const isOnService = useServiceStatus(user);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [presenceLoading, setPresenceLoading] = useState(false);
 
   const roleMeta = ROLE_META[user?.role || ''] ?? { label: 'Utente', className: 'border-slate-200 bg-slate-50 text-slate-600' };
+  const currentPresence = normalizePresence(user?.presenceStatus);
+  const currentPresenceMeta = PRESENCE_META[currentPresence];
   const canAccessActivity = ['owner', 'director', 'vice_director'].includes(user?.role || '') && isOnService;
   const canAccessAnnouncements = isOnService;
   const canAccessShifts = isOnService;
@@ -38,6 +52,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
     ...(canAccessShifts ? [{ id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const }] : []),
     ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', description: 'Comunicazioni del team', icon: Megaphone, page: 'announcements' as const }] : []),
   ];
+
+  const handlePresenceChange = async (status: PresenceStatus) => {
+    if (!setPresenceStatus || status === currentPresence || presenceLoading) return;
+    setPresenceLoading(true);
+    try {
+      const success = await setPresenceStatus(status);
+      if (success) setPresenceOpen(false);
+    } finally {
+      setPresenceLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     if (!user || isLoggingOut) return;
@@ -74,11 +99,61 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPage, onPageCha
           <img src={isOpen ? '/aurum-motors-logo.svg' : '/aurum-motors-mark.svg'} alt="Aurum Motors" className={isOpen ? 'h-11 w-auto max-w-[14rem]' : 'h-11 w-11'} draggable={false} />
         </div>
         {isOpen && user && (
-          <button type="button" onClick={() => setShowProfileModal(true)} className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99]">
-            <div className="relative shrink-0"><Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} /><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isOnService ? 'bg-emerald-500' : 'bg-slate-300'}`} /></div>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{user.name || 'Utente'}</p><span className={`mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${roleMeta.className}`}>{roleMeta.label}</span></div>
-            <Settings className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-amber-600" />
-          </button>
+          <div className="relative mt-4">
+            <button type="button" onClick={() => setShowProfileModal(true)} className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 active:scale-[0.99]">
+              <div className="relative shrink-0">
+                <Avatar src={user.avatar_url} alt={user.name || 'Utente'} size="md" fallbackText={user.name || 'U'} />
+                <button
+                  type="button"
+                  aria-label={`Stato: ${currentPresenceMeta.label}. Cambia stato`}
+                  title={`Stato: ${currentPresenceMeta.label}`}
+                  onClick={(event) => { event.stopPropagation(); setPresenceOpen(previous => !previous); }}
+                  className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                >
+                  <span className={`h-3 w-3 rounded-full ${currentPresenceMeta.dot}`} />
+                </button>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">{user.name || 'Utente'}</p>
+                <span className={`mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${roleMeta.className}`}>{roleMeta.label}</span>
+              </div>
+              <Settings className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-amber-600" />
+            </button>
+
+            {presenceOpen && (
+              <>
+                <button type="button" aria-label="Chiudi selezione stato" className="fixed inset-0 z-40 cursor-default" onClick={() => setPresenceOpen(false)} />
+                <div className="absolute left-2 right-2 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.16)] ring-1 ring-black/5">
+                  <div className="px-3 pb-2 pt-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Stato personale</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Scegli come vuoi apparire al team</p>
+                  </div>
+                  <div className="space-y-1">
+                    {(Object.keys(PRESENCE_META) as PresenceStatus[]).map(status => {
+                      const meta = PRESENCE_META[status];
+                      const active = status === currentPresence;
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          disabled={presenceLoading}
+                          onClick={() => void handlePresenceChange(status)}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? meta.activeBg : 'hover:bg-slate-50'} disabled:cursor-wait disabled:opacity-60`}
+                        >
+                          <span className={`h-3.5 w-3.5 shrink-0 rounded-full ${meta.dot} ${active ? 'ring-4 ring-white shadow-sm' : ''}`} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-slate-800">{meta.label}</span>
+                            <span className="block text-[10px] text-slate-400">{status === 'available' ? 'Disponibile per il team' : status === 'inactive' ? 'Non attivamente disponibile' : 'Impegnato in un’attività'}</span>
+                          </span>
+                          {active && <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 shadow-sm">Attuale</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4" aria-label="Navigazione principale">
