@@ -39,6 +39,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
   const [focusedField, setFocusedField] = useState<
     'name' | 'email' | 'password' | null
   >(null);
@@ -59,24 +60,32 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       const cleanEmail = email.trim().toLowerCase();
 
       if (!cleanName || !cleanEmail || !password) {
-        throw new Error('Compila tutti i campi richiesti.');
+        throw new Error(
+          'Compila tutti i campi richiesti.',
+        );
       }
 
       if (password.length < 6) {
-        throw new Error('La password deve avere almeno 6 caratteri.');
+        throw new Error(
+          'La password deve avere almeno 6 caratteri.',
+        );
       }
 
-      const parsedAvailability = parseAvailability(availability);
-      const invalidDays = AVAILABILITY_DAYS.filter(([key]) => {
-        const day = parsedAvailability[key];
+      const parsedAvailability =
+        parseAvailability(availability);
 
-        return (
-          !day?.enabled ||
-          !day.start ||
-          !day.end ||
-          day.start >= day.end
-        );
-      });
+      const invalidDays = AVAILABILITY_DAYS.filter(
+        ([key]) => {
+          const day = parsedAvailability[key];
+
+          return (
+            !day?.enabled ||
+            !day.start ||
+            !day.end ||
+            day.start >= day.end
+          );
+        },
+      );
 
       if (invalidDays.length > 0) {
         throw new Error(
@@ -87,10 +96,16 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       const {
         data: pendingToken,
         error: availabilityError,
-      } = await supabase.rpc('save_registration_availability', {
-        p_email: cleanEmail,
-        p_availability: serializeAvailability(parsedAvailability),
-      });
+      } = await supabase.rpc(
+        'save_registration_availability',
+        {
+          p_email: cleanEmail,
+          p_availability:
+            serializeAvailability(
+              parsedAvailability,
+            ),
+        },
+      );
 
       if (availabilityError || !pendingToken) {
         throw new Error(
@@ -106,16 +121,18 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
       if (!result.success) {
         throw new Error(
-          result.message || 'Non è stato possibile creare l’account.',
+          result.message ||
+            'Non è stato possibile creare l’account.',
         );
       }
 
-      const { error: applyError } = await supabase.rpc(
-        'apply_registration_availability',
-        {
-          p_token: pendingToken,
-        },
-      );
+      const { error: applyError } =
+        await supabase.rpc(
+          'apply_registration_availability',
+          {
+            p_token: pendingToken,
+          },
+        );
 
       if (applyError) {
         console.warn(
@@ -125,17 +142,24 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       }
 
       setSuccess(
-        result.message || 'Account creato. Ora puoi accedere.',
+        result.message ||
+          'Account creato. Ora puoi accedere.',
       );
 
       setEmail('');
       setPassword('');
       setName('');
+
       setAvailability(
-        serializeAvailability(createDefaultAvailability()),
+        serializeAvailability(
+          createDefaultAvailability(),
+        ),
       );
     } catch (err: unknown) {
-      console.error('Registration error:', err);
+      console.error(
+        'Registration error:',
+        err,
+      );
 
       setError(
         getErrorMessage(
@@ -149,7 +173,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   };
 
   return (
-    <main className="app-viewport relative flex min-h-screen items-center justify-center overflow-y-auto bg-[#070707] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="app-viewport relative flex min-h-screen items-center justify-center overflow-y-auto bg-[#070707] px-4 py-5 sm:px-6 lg:px-8">
+      {/* Background video */}
       <video
         autoPlay
         loop
@@ -165,48 +190,63 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         />
       </video>
 
+      {/* Background */}
       <div className="absolute inset-0 bg-black/72" />
+
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,7,18,0.94)_0%,rgba(3,7,18,0.78)_48%,rgba(3,7,18,0.58)_100%)]" />
+
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_25%,rgba(245,158,11,0.14),transparent_30%),radial-gradient(circle_at_82%_78%,rgba(245,158,11,0.08),transparent_28%)]" />
 
-      <div className="relative z-10 grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[0.88fr_1.12fr] lg:gap-16">
-        <section className="hidden lg:block">
+      {/* Main */}
+      <div className="relative z-10 grid w-full max-w-6xl items-start gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:gap-16">
+        {/* Left promotional panel */}
+        <section className="hidden self-start pt-1 lg:sticky lg:top-4 lg:block">
           <div className="max-w-xl">
             <img
               src="/aurum-motors-logo.svg"
               alt="Aurum Motors"
-              className="h-auto w-[235px]"
+              className="h-auto w-[225px]"
               draggable={false}
             />
 
-            <p className="mt-8 text-sm font-bold uppercase tracking-[0.24em] text-amber-400">
+            <p className="mt-6 text-sm font-bold uppercase tracking-[0.24em] text-amber-400">
               Aurum Motors
             </p>
 
-            <h1 className="mt-3 text-5xl font-black leading-[1.04] tracking-tight text-white xl:text-6xl">
+            <h1 className="mt-3 text-5xl font-black leading-[1.03] tracking-tight text-white xl:text-6xl">
               Inizia il tuo
               <span className="block text-amber-400">
                 nuovo percorso.
               </span>
             </h1>
 
-            <p className="mt-6 max-w-lg text-base leading-7 text-slate-300">
-              Crea il tuo account e indicaci i giorni e gli orari in cui sei disponibile.
+            <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
+              Crea il tuo account e indicaci
+              i giorni e gli orari in cui sei
+              disponibile.
             </p>
 
-            <div className="mt-8 flex items-center gap-3 text-sm text-slate-400">
+            <div className="mt-7 flex items-center gap-3 text-sm text-slate-400">
               <span className="h-px w-12 bg-amber-400/60" />
-              <span>Benvenuto in Aurum Motors</span>
+
+              <span>
+                Benvenuto in Aurum Motors
+              </span>
             </div>
           </div>
         </section>
 
+        {/* Register card */}
         <section className="w-full">
           <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/80 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-7 lg:p-8">
+            {/* Top accent */}
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+
+            {/* Glow */}
             <div className="absolute -right-24 -top-24 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
 
             <div className="relative">
+              {/* Mobile logo */}
               <div className="mb-7 text-center lg:hidden">
                 <img
                   src="/aurum-motors-logo.svg"
@@ -216,6 +256,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                 />
               </div>
 
+              {/* Heading */}
               <div className="mb-7 border-b border-white/8 pb-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">
                   Nuovo account
@@ -226,11 +267,16 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Inserisci i tuoi dati e scegli i tuoi orari disponibili.
+                  Inserisci i tuoi dati e scegli
+                  i tuoi orari disponibili.
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-5"
+              >
+                {/* Name + email */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="block">
                     <span
@@ -261,9 +307,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                       <input
                         required
                         value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        onFocus={() => setFocusedField('name')}
-                        onBlur={() => setFocusedField(null)}
+                        onChange={(event) =>
+                          setName(
+                            event.target.value,
+                          )
+                        }
+                        onFocus={() =>
+                          setFocusedField('name')
+                        }
+                        onBlur={() =>
+                          setFocusedField(null)
+                        }
                         autoComplete="name"
                         className="h-14 w-full bg-transparent pl-12 pr-4 text-sm text-white outline-none placeholder:text-slate-600"
                         placeholder="Mario Rossi"
@@ -301,9 +355,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                         required
                         type="email"
                         value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        onFocus={() => setFocusedField('email')}
-                        onBlur={() => setFocusedField(null)}
+                        onChange={(event) =>
+                          setEmail(
+                            event.target.value,
+                          )
+                        }
+                        onFocus={() =>
+                          setFocusedField('email')
+                        }
+                        onBlur={() =>
+                          setFocusedField(null)
+                        }
                         autoComplete="email"
                         inputMode="email"
                         spellCheck={false}
@@ -314,6 +376,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                   </label>
                 </div>
 
+                {/* Password */}
                 <label className="block">
                   <div className="mb-2 flex items-center justify-between">
                     <span
@@ -348,12 +411,24 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
                     <input
                       required
-                      type={showPassword ? 'text' : 'password'}
+                      type={
+                        showPassword
+                          ? 'text'
+                          : 'password'
+                      }
                       minLength={6}
                       value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
+                      onChange={(event) =>
+                        setPassword(
+                          event.target.value,
+                        )
+                      }
+                      onFocus={() =>
+                        setFocusedField('password')
+                      }
+                      onBlur={() =>
+                        setFocusedField(null)
+                      }
                       autoComplete="new-password"
                       className="h-14 w-full bg-transparent pl-12 pr-12 text-sm text-white outline-none placeholder:text-slate-600"
                       placeholder="Scegli una password"
@@ -361,9 +436,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => setShowPassword((value) => !value)}
+                      onClick={() =>
+                        setShowPassword(
+                          (value) => !value,
+                        )
+                      }
                       className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white/5 hover:text-amber-300"
-                      aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                      aria-label={
+                        showPassword
+                          ? 'Nascondi password'
+                          : 'Mostra password'
+                      }
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -374,6 +457,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                   </div>
                 </label>
 
+                {/* Availability */}
                 <section className="overflow-hidden rounded-2xl border border-amber-400/15 bg-amber-400/[0.035]">
                   <div className="flex items-start gap-3 border-b border-white/8 px-4 py-4 sm:px-5">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/10 text-amber-300">
@@ -386,7 +470,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                       </h3>
 
                       <p className="mt-0.5 text-[11px] leading-5 text-slate-500">
-                        Indica i giorni e gli orari in cui sei disponibile.
+                        Indica i giorni e gli orari
+                        in cui sei disponibile.
                       </p>
                     </div>
                   </div>
@@ -398,11 +483,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                     />
 
                     <p className="mt-3 text-[11px] leading-5 text-slate-500">
-                      Scegli gli orari con cui ti senti più a tuo agio.
+                      Scegli gli orari con cui
+                      ti senti più a tuo agio.
                     </p>
                   </div>
                 </section>
 
+                {/* Error */}
                 {error && (
                   <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3.5">
                     <p className="text-sm leading-5 text-red-200">
@@ -411,13 +498,18 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                   </div>
                 )}
 
+                {/* Success */}
                 {success && (
                   <div className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3.5 text-sm text-emerald-200">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p className="leading-5">{success}</p>
+
+                    <p className="leading-5">
+                      {success}
+                    </p>
                   </div>
                 )}
 
+                {/* Submit */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -428,17 +520,24 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                   {loading ? (
                     <>
                       <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-900/25 border-t-slate-950" />
-                      Creazione account...
+
+                      <span>
+                        Creazione account...
+                      </span>
                     </>
                   ) : (
                     <>
-                      <span>Crea il mio account</span>
+                      <span>
+                        Crea account
+                      </span>
+
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </>
                   )}
                 </button>
               </form>
 
+              {/* Login */}
               <div className="mt-6 border-t border-white/8 pt-6 text-center">
                 <p className="text-xs text-slate-500">
                   Hai già un account?
