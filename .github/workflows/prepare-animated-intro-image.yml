@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   prepare-image:
-    if: ${{ hashFiles('public/images/.intro-car-payload/*.b64') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,6 +42,8 @@ jobs:
           with Image.open(source) as image:
               image = image.convert('RGBA')
               image.save(target, format='PNG', optimize=True)
+
+          with Image.open(target) as image:
               image.verify()
 
           print(f'Created {target} ({target.stat().st_size} bytes)')
