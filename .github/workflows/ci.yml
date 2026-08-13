@@ -72,14 +72,78 @@ jobs:
                   text = text.replace(old, new)
               path.write_text(text)
 
+          shift_path = Path('src/components/ShiftsPage.tsx')
+          shift_text = shift_path.read_text()
+          shift_replacements = [
+              (
+                  """interface Shift {\n  id: string;\n  user_id: string;\n  shift_date: string;\n  start_time: string;\n  end_time: string;\n  notes: string | null;\n}\n""",
+                  """interface Shift {\n  id: string;\n  user_id: string;\n  shift_date: string;\n  start_time: string;\n  end_time: string;\n  notes: string | null;\n  supervisor_id: string | null;\n}\n"""
+              ),
+              (
+                  """    userIds: [string, string];\n    start: string;\n    end: string;\n    notes: string;\n""",
+                  """    userIds: [string, string];\n    supervisorId: string;\n    start: string;\n    end: string;\n    notes: string;\n"""
+              ),
+              (
+                  """    userIds: ['', ''],\n    start: '06:00',\n""",
+                  """    userIds: ['', ''],\n    supervisorId: '',\n    start: '06:00',\n"""
+              ),
+              (
+                  """            'id,user_id,shift_date,start_time,end_time,notes',\n""",
+                  """            'id,user_id,shift_date,start_time,end_time,notes,supervisor_id',\n"""
+              ),
+              (
+                  """    setForm({\n      slot: slotKey,\n      userIds: [\n        availableUsers[0]?.id ?? '',\n        availableUsers[1]?.id ?? '',\n      ],\n      start: slot.from,\n""",
+                  """    setForm({\n      slot: slotKey,\n      userIds: [\n        availableUsers[0]?.id ?? '',\n        availableUsers[1]?.id ?? '',\n      ],\n      supervisorId: '',\n      start: slot.from,\n"""
+              ),
+              (
+                  """      userIds: [\n        pair[0]?.user_id ?? '',\n        pair[1]?.user_id ?? '',\n      ],\n      start:\n""",
+                  """      userIds: [\n        pair[0]?.user_id ?? '',\n        pair[1]?.user_id ?? '',\n      ],\n      supervisorId: pair[0]?.supervisor_id ?? '',\n      start:\n"""
+              ),
+              (
+                  """          notes:\n            form.notes.trim() || null,\n          created_by: user?.id ?? null,\n""",
+                  """          notes:\n            form.notes.trim() || null,\n          created_by: user?.id ?? null,\n          supervisor_id: form.supervisorId || null,\n"""
+              ),
+              (
+                  """                        start: slot.from,\n                        end: slot.to,\n                      }),\n""",
+                  """                        supervisorId: '',\n                        start: slot.from,\n                        end: slot.to,\n                      }),\n"""
+              ),
+              (
+                  """        }\n\n        setSaving(true);\n""",
+                  """        }\n\n    if (form.supervisorId) {\n      const supervisor = userMap.get(form.supervisorId);\n      if (!supervisor || !HIGH_ROLES.has(supervisor.role)) {\n        showError('Supervisore non valido', 'Il supervisore deve essere Proprietario, Direttore o Vice Direttore.');\n        return;\n      }\n      if (selectedUsers.includes(form.supervisorId)) {\n        showError('Supervisore non valido', 'Il supervisore deve essere diverso dalle due persone del turno.');\n        return;\n      }\n      if (isUserAbsentInSlot(form.supervisorId, form.slot)) {\n        showWarning('Supervisore assente', 'Il supervisore selezionato è assente in questa fascia.');\n        return;\n      }\n    }\n\n        setSaving(true);\n"""
+              ),
+              (
+                  """                        {absenceRows.length >\n                          0 && (\n""",
+                  """                        {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                          <div className=\"mt-2 text-xs text-gray-600\">\n                            <span className=\"font-semibold\">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}\n                          </div>\n                        )}\n\n                        {absenceRows.length >\n                          0 && (\n"""
+              ),
+              (
+                  """                  {renderAbsences(\n                    slot.key,\n                  )}\n""",
+                  """                  {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                    <div className=\"mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800\">\n                      <span className=\"font-semibold\">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}\n                    </div>\n                  )}\n\n                  {renderAbsences(\n                    slot.key,\n                  )}\n"""
+              ),
+          ]
+          for old, new in shift_replacements:
+              if old not in shift_text:
+                  raise SystemExit(f'Missing shift patch block: {old[:80]}')
+              shift_text = shift_text.replace(old, new, 1)
+
+          supervisor_block = '''\n              {/* SUPERVISOR */}\n              <label className=\"block\">\n                <span className=\"mb-1.5 block text-sm font-semibold text-gray-700\">Supervisore <span className=\"font-normal text-gray-400\">(opzionale)</span></span>\n                <select value={form.supervisorId} onChange={(event) => setForm((current) => ({ ...current, supervisorId: event.target.value }))} className=\"h-11 w-full rounded-xl border border-gray-200 px-3\">\n                  <option value=\"\">Nessun supervisore</option>\n                  {users.filter((employee) => HIGH_ROLES.has(employee.role) && !form.userIds.includes(employee.id) && !isUserAbsentInSlot(employee.id, form.slot)).map((employee) => (\n                    <option key={employee.id} value={employee.id}>\n                      {employee.name} · {ROLE_LABELS[employee.role] ?? employee.role}\n                    </option>\n                  ))}\n                </select>\n              </label>\n'''
+          marker = '              {/* TIME */}\n'
+          if supervisor_block.strip() not in shift_text:
+              if marker not in shift_text:
+                  raise SystemExit('Missing TIME marker for supervisor block')
+              shift_text = shift_text.replace(marker, supervisor_block + '\n' + marker, 1)
+
+          shift_path.write_text(shift_text)
+
           for path in [
               '.github/workflows/fix-lint-realtime-types.yml',
               '.github/workflows/fix-admin-unused.yml',
               '.github/workflows/fix-final-lint.yml',
               '.github/workflows/fix-role-save.yml',
               '.github/workflows/fix-role-persistence.yml',
+              '.github/workflows/patch-shift-supervisor.yml',
           ]:
               Path(path).unlink(missing_ok=True)
+          Path('.github/shift-supervisor-patch.trigger').unlink(missing_ok=True)
           PY
       - name: Lint
         run: npm run lint
@@ -90,7 +154,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src .github/workflows
+          git add src .github/workflows .github/shift-supervisor-patch.trigger
           git diff --cached --quiet && exit 0
           git commit -m 'fix: clean realtime lint errors'
           git push
