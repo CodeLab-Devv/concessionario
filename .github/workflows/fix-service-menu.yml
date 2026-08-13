@@ -1,0 +1,45 @@
+name: fix service-only menu
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Sidebar and Shifts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          sidebar = Path('src/components/Sidebar.tsx')
+          s = sidebar.read_text()
+          old = "  const canAccessAnnouncements = isOnService;\n\n  const menuItems = [\n    { id: 'dashboard', label: 'Home', description: 'Panoramica', icon: LayoutDashboard, page: 'dashboard' as const },\n    ...(canAccessActivity ? [{ id: 'activity', label: 'Attività', description: 'Registro operativo', icon: Activity, page: 'activity' as const }] : []),\n    { id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const },\n    ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', description: 'Comunicazioni del team', icon: Megaphone, page: 'announcements' as const }] : []),\n  ];"
+          new = "  const canAccessAnnouncements = isOnService;\n  const canAccessShifts = isOnService;\n\n  const menuItems = [\n    { id: 'dashboard', label: 'Home', description: 'Panoramica', icon: LayoutDashboard, page: 'dashboard' as const },\n    ...(canAccessActivity ? [{ id: 'activity', label: 'Attività', description: 'Registro operativo', icon: Activity, page: 'activity' as const }] : []),\n    ...(canAccessShifts ? [{ id: 'shifts', label: 'Turni', description: 'Disponibilità e turnazione', icon: CalendarDays, page: 'shifts' as const }] : []),\n    ...(canAccessAnnouncements ? [{ id: 'announcements', label: 'Annunci', description: 'Comunicazioni del team', icon: Megaphone, page: 'announcements' as const }] : []),\n  ];"
+          if old not in s:
+              raise SystemExit('Sidebar target not found')
+          sidebar.write_text(s.replace(old, new, 1))
+
+          shifts = Path('src/components/ShiftsPage.tsx')
+          s = shifts.read_text()
+          marker = "  const canManage = HIGH_ROLES.has(user?.role ?? '');\n"
+          replacement = marker + "  const isOnService = Boolean(user?.isOnService);\n"
+          if marker not in s:
+              raise SystemExit('Shifts marker not found')
+          s = s.replace(marker, replacement, 1)
+          guard_marker = "  const [selectedDate, setSelectedDate] = useState(() =>\n"
+          guard = "  if (!isOnService) {\n    return (\n      <div className=\"flex min-h-[520px] items-center justify-center px-4\">\n        <div className=\"max-w-md rounded-3xl border border-amber-200 bg-white p-10 text-center shadow-xl shadow-amber-100/50\">\n          <div className=\"mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50\"><CalendarDays className=\"h-8 w-8 text-amber-500\" /></div>\n          <h3 className=\"text-xl font-bold text-gray-900\">Non sei in servizio</h3>\n          <p className=\"mt-2 text-sm leading-6 text-gray-500\">Metti lo stato in servizio per visualizzare e gestire i turni.</p>\n        </div>\n      </div>\n    );\n  }\n\n"
+          if guard_marker not in s:
+              raise SystemExit('Shifts insertion point not found')
+          shifts.write_text(s.replace(guard_marker, guard + guard_marker, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/Sidebar.tsx src/components/ShiftsPage.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(access): hide activity and shifts while off service'
+          git push
