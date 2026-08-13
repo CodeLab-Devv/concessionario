@@ -23,7 +23,7 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
   const { user } = useAuth();
   const { showSuccess, showError, showWarning } = useNotifications();
   const { showDeleteConfirm } = useDialogs();
-  const isOwner = user?.role === 'owner';
+  const canManageWarnings = ['owner', 'director'].includes(user?.role || '');
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,7 +74,7 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
   }, [employeeId]);
 
   const createWarning = async () => {
-    if (!isOwner || !user?.id || saving) return;
+    if (!canManageWarnings || !user?.id || saving) return;
     const cleanReason = reason.trim();
     if (cleanReason.length < 3) {
       showWarning('Motivazione mancante', 'Inserisci una motivazione valida.');
@@ -101,7 +101,7 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
   };
 
   const deleteWarning = async (id: string) => {
-    if (!isOwner) return;
+    if (!canManageWarnings) return;
     const confirmed = await showDeleteConfirm('questo richiamo', 'richiamo');
     if (!confirmed) return;
 
@@ -114,7 +114,7 @@ export const EmployeeWarningsSection: React.FC<EmployeeWarningsSectionProps> = (
     showSuccess('Richiamo eliminato');
   };
 
-  if (!isOwner) return null;
+  if (!canManageWarnings) return null;
 
   return (
     <section className="mb-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
