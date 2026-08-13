@@ -56,7 +56,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   return (
-    <div className="safe-area-overlay fixed inset-0 z-50 overflow-y-auto">
+    <div className="safe-area-overlay fixed inset-0 z-[9999] overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="modal-shell relative w-full max-w-lg transform overflow-y-auto rounded-lg bg-white shadow-xl sm:my-8">
           <button
