@@ -248,8 +248,26 @@ export const Dashboard: React.FC = () => {
 
   const handleAddSale = async (sale: Omit<Sale, 'id'>) => {
     try {
-      const { error } = await supabase.from('sales').insert({ employee_id: sale.employeeId, employee_name: sale.employeeName, item_name: sale.itemName, car_model: sale.carModel, price: sale.price, quantity: sale.quantity, total: sale.total, date: sale.date, type: sale.type, category: sale.category }).select().single();
+      const { data: insertedSale, error } = await supabase.from('sales').insert({ employee_id: sale.employeeId, employee_name: sale.employeeName, item_name: sale.itemName, car_model: sale.carModel, price: sale.price, quantity: sale.quantity, total: sale.total, date: sale.date, type: sale.type, category: sale.category }).select().single();
       if (error) { console.error('Error adding sale:', error); return; }
+      if (insertedSale) {
+        const newSale: Sale = {
+          id: insertedSale.id,
+          employeeId: insertedSale.employee_id,
+          employeeName: insertedSale.employee_name,
+          itemName: insertedSale.item_name,
+          carModel: insertedSale.car_model,
+          price: insertedSale.price,
+          quantity: insertedSale.quantity,
+          total: insertedSale.total,
+          date: insertedSale.date,
+          type: insertedSale.type,
+          category: insertedSale.category,
+          created_at: insertedSale.created_at || new Date().toISOString(),
+        };
+        setSales(current => sortSalesByCreatedAt(current.some(item => item.id === newSale.id) ? current : [newSale, ...current]));
+        setSalesPage(1);
+      }
       if (user) await supabase.rpc('log_activity', { p_user_id: user.id, p_action: 'Creazione Vendita', p_details: `${user.name} ha creato una nuova vendita: "${sale.itemName}" - Cliente: ${sale.employeeName} - Importo: €${Math.round(sale.total).toLocaleString()}`, p_target_user_id: sale.employeeId });
     } catch (error) { console.error('Error adding sale:', error); }
   };
@@ -344,7 +362,7 @@ export const Dashboard: React.FC = () => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="group relative bg-white rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 ease-out overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div><div className="relative z-10 flex items-center"><div className="flex-shrink-0"><div className="p-3 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl shadow-lg"><AnimatedCarIcon className="h-6 w-6 text-white" /></div></div><div className="ml-4"><p className="text-sm font-semibold text-emerald-700 mb-1">{['employee', 'probation'].includes(user?.role || '') ? 'Commissioni Totali' : 'Fatturato Totale'}</p><p className="text-2xl font-bold text-gray-900">€<CountUpNumber value={Math.round(totalRevenue)} duration={2000} /></p><div className="flex items-center mt-2"><div className="w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse"></div><p className="text-xs text-emerald-600 font-medium">{['employee', 'probation'].includes(user?.role || '') ? '10% di commissione per veicolo' : 'Aurum Motors'}</p></div></div></div></div>
+          <div className="group relative bg-white rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 ease-out overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div><div className="relative z-10 flex items-center"><div className="flex-shrink-0"><div className="p-3 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl shadow-lg"><AnimatedCarIcon className="h-6 w-6 text-white" /></div></div><div className="ml-4"><p className="text-sm font-semibold text-emerald-700 mb-1">{['employee', 'probation'].includes(user?.role || '') ? 'Stipendio Totale' : 'Fatturato Totale'}</p><p className="text-2xl font-bold text-gray-900">€<CountUpNumber value={Math.round(totalRevenue)} duration={2000} /></p><div className="flex items-center mt-2"><div className="w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse"></div><p className="text-xs text-emerald-600 font-medium">{['employee', 'probation'].includes(user?.role || '') ? '10% di commissione per veicolo' : 'Aurum Motors'}</p></div></div></div></div>
           <div className="group relative bg-white rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 ease-out overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-cyan-50 opacity-60"></div><div className="relative z-10 flex items-center"><div className="flex-shrink-0"><div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg"><AnimatedChartIcon className="h-6 w-6 text-white" /></div></div><div className="ml-4"><p className="text-sm font-semibold text-blue-700 mb-1">Vendite Totali</p><p className="text-2xl font-bold text-gray-900"><CountUpNumber value={userSales.length} duration={1500} /></p><div className="flex items-center mt-2"><div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div><p className="text-xs text-blue-600 font-medium">Veicoli venduti</p></div></div></div></div>
           {canManageEmployees && <div className="group relative bg-white rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 ease-out overflow-hidden"><div className="relative z-10 flex items-center"><div className="flex-shrink-0"><div className="p-3 bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl shadow-lg"><Users className="h-6 w-6 text-white" /></div></div><div className="ml-4"><p className="text-sm font-semibold text-rose-700 mb-1">Team Attivo</p><p className="text-2xl font-bold text-gray-900"><CountUpNumber value={employees.length} duration={1500} /></p><div className="flex items-center mt-2"><div className="w-2 h-2 bg-rose-400 rounded-full mr-2 animate-pulse"></div><p className="text-xs text-rose-600 font-medium">Dipendenti registrati</p></div></div></div></div>}
         </div>
