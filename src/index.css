@@ -43,6 +43,15 @@ body {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+/* PWA / mobile browser safe-area helpers. On desktop the inset is 0. */
+.pwa-safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.pwa-safe-top-button {
+  top: calc(env(safe-area-inset-top) + 0.75rem);
+}
+
 .modal-shell {
   max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
