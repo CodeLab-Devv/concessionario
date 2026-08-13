@@ -43,6 +43,7 @@ interface Shift {
   start_time: string;
   end_time: string;
   notes: string | null;
+  supervisor_id: string | null;
 }
 
 interface Absence {
@@ -223,12 +224,14 @@ export const ShiftsPage: React.FC = () => {
   const [form, setForm] = useState<{
     slot: ShiftSlot;
     userIds: [string, string];
+    supervisorId: string;
     start: string;
     end: string;
     notes: string;
   }>({
     slot: 'mattino',
     userIds: ['', ''],
+    supervisorId: '',
     start: '06:00',
     end: '12:00',
     notes: '',
@@ -320,7 +323,7 @@ export const ShiftsPage: React.FC = () => {
         supabase
           .from('daily_shifts')
           .select(
-            'id,user_id,shift_date,start_time,end_time,notes',
+            'id,user_id,shift_date,start_time,end_time,notes,supervisor_id',
           )
           .eq('shift_date', selectedDate)
           .order('start_time'),
@@ -762,6 +765,7 @@ export const ShiftsPage: React.FC = () => {
         availableUsers[0]?.id ?? '',
         availableUsers[1]?.id ?? '',
       ],
+      supervisorId: '',
       start: slot.from,
       end: slot.to,
       notes: '',
@@ -793,6 +797,7 @@ export const ShiftsPage: React.FC = () => {
         pair[0]?.user_id ?? '',
         pair[1]?.user_id ?? '',
       ],
+      supervisorId: pair[0]?.supervisor_id ?? '',
       start:
         pair[0]?.start_time.slice(0, 5) ??
         slot.from,
@@ -850,8 +855,18 @@ export const ShiftsPage: React.FC = () => {
       return;
     }
 
-    const [firstUser, secondUser] =
-      form.userIds;
+    const [firstUser, secondUser] = form.userIds;
+    const supervisorUser = form.supervisorId ? userMap.get(form.supervisorId) : null;
+
+    if (supervisorUser && !HIGH_ROLES.has(supervisorUser.role)) {
+      showError('Supervisore non valido', 'Il supervisore deve essere Proprietario, Direttore o Vice Direttore.');
+      return;
+    }
+
+    if (form.supervisorId && selectedUsers.includes(form.supervisorId)) {
+      showError('Supervisore non valido', 'Il supervisore deve essere una persona diversa dalla coppia del turno.');
+      return;
+    }
 
     if (
       !firstUser ||
@@ -929,6 +944,7 @@ export const ShiftsPage: React.FC = () => {
           notes:
             form.notes.trim() || null,
           created_by: user?.id ?? null,
+          supervisor_id: form.supervisorId || null,
         }),
       );
 
@@ -1547,6 +1563,13 @@ export const ShiftsPage: React.FC = () => {
                           </span>
                         )}
 
+                        {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (
+                          <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                            <span className="font-semibold">Supervisore:</span>
+                            <span>{userMap.get(rows[0].supervisor_id)?.name}</span>
+                          </div>
+                        )}
+
                         {absenceRows.length >
                           0 && (
                           <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-red-700">
@@ -1807,6 +1830,12 @@ export const ShiftsPage: React.FC = () => {
                     </div>
                   )}
 
+                  {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (
+                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <span className="font-semibold">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}
+                    </div>
+                  )}
+
                   {renderAbsences(
                     slot.key,
                   )}
@@ -1890,6 +1919,7 @@ export const ShiftsPage: React.FC = () => {
                           available[1]?.id ??
                             '',
                         ],
+                        supervisorId: '',
                         start: slot.from,
                         end: slot.to,
                       }),
@@ -2001,6 +2031,26 @@ export const ShiftsPage: React.FC = () => {
                   },
                 )}
               </div>
+
+
+              {/* SUPERVISOR */}
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-gray-700">Supervisore <span className="font-normal text-gray-400">(opzionale)</span></span>
+                <select
+                  value={form.supervisorId}
+                  onChange={(event) => setForm((current) => ({ ...current, supervisorId: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-gray-200 px-3"
+                >
+                  <option value="">Nessun supervisore</option>
+                  {users
+                    .filter((employee) => HIGH_ROLES.has(employee.role) && !form.userIds.includes(employee.id) && !isUserAbsentInSlot(employee.id, form.slot))
+                    .map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name} · {ROLE_LABELS[employee.role] ?? employee.role}
+                      </option>
+                    ))}
+                </select>
+              </label>
 
               {/* TIME */}
               <div className="grid grid-cols-2 gap-3">
