@@ -35,63 +35,6 @@ jobs:
               'src/components/Dashboard.tsx': {
                   'role:nextRow.role ?? \'\'': "role: String(nextRow.role || '')",
               },
-              'src/components/modals/ProfileModal.tsx': {
-                  '''      const changedEmail = email !== user.email.toLowerCase();
-      let emailChangeRequested = false;
-
-      if (changedEmail) {
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-          throw new Error('Inserisci un indirizzo email valido.');
-        }
-
-        const { error: emailError } = await supabase.auth.updateUser({
-          email,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
-        });
-
-        if (emailError) {
-          throw new Error(`Impossibile cambiare email: ${emailError.message}`);
-        }
-
-        emailChangeRequested = true;
-      }
-''': '''      const changedEmail = email !== user.email.toLowerCase();
-      let emailChanged = false;
-
-      if (changedEmail) {
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-          throw new Error('Inserisci un indirizzo email valido.');
-        }
-
-        const { data, error: emailError } = await supabase.functions.invoke('update-own-email', {
-          body: { email },
-        });
-
-        if (emailError) {
-          throw new Error(`Impossibile cambiare email: ${emailError.message}`);
-        }
-
-        if (!data?.success) {
-          throw new Error(data?.error || 'Impossibile cambiare email.');
-        }
-
-        emailChanged = true;
-      }
-''',
-                  "if (!changedProfile && !emailChangeRequested && !changedPassword) {": "if (!changedProfile && !emailChanged && !changedPassword) {",
-                  "        email: emailChangeRequested ? user.email : email,": "        email: emailChanged ? email : email || user.email,",
-                  '''      if (emailChangeRequested) {
-        showSuccess(
-          'Conferma richiesta',
-          `Abbiamo inviato una email di conferma a ${email}. L'indirizzo verrà cambiato dopo la conferma.`,
-        );
-      } else {
-        showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
-      }
-''': "      showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');\n",
-              },
           }
 
           for filename, mapping in replacements.items():
@@ -105,7 +48,6 @@ jobs:
               '.github/workflows/fix-lint-realtime-types.yml',
               '.github/workflows/fix-admin-unused.yml',
               '.github/workflows/fix-final-lint.yml',
-              '.github/workflows/fix-immediate-email-change.yml',
           ]:
               Path(path).unlink(missing_ok=True)
           PY
