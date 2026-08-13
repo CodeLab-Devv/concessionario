@@ -1,3 +1,10 @@
+export type PresenceStatus =
+  | 'available'
+  | 'inactive'
+  | 'busy'
+  | 'dnd'
+  | 'absent';
+
 export interface User {
   id: string;
   email: string;
@@ -5,6 +12,7 @@ export interface User {
   role: 'owner' | 'director' | 'vice_director' | 'employee' | 'probation';
   employeeType?: 'dealer';
   isOnService?: boolean;
+  presenceStatus?: PresenceStatus;
   lastServiceStatusChange?: string;
   createdAt: string;
   avatar_url?: string;
@@ -21,6 +29,7 @@ export interface Employee {
   hireDate: string;
   totalSales: number;
   isOnService?: boolean;
+  presenceStatus?: PresenceStatus;
   lastServiceStatusChange?: string;
   avatar_url?: string;
   availability?: string;
@@ -79,6 +88,7 @@ export interface AuthContextType {
   updateUserRole?: (userId: string, newRole: 'owner' | 'director' | 'vice_director' | 'employee' | 'probation') => Promise<boolean>;
   fireEmployee?: (userId: string) => Promise<boolean>;
   toggleServiceStatus?: (userId?: string) => Promise<boolean>;
+  setPresenceStatus?: (status: PresenceStatus) => Promise<boolean>;
   resetAllData?: () => Promise<boolean>;
   employees?: User[];
   fetchEmployeesStatus?: () => Promise<User[]>;
