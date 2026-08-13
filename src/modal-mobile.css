@@ -1,7 +1,11 @@
 /* Mobile-first modal behavior for iOS, Android and small screens. */
 .safe-area-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
   overscroll-behavior: none;
   touch-action: none;
+  isolation: isolate;
 }
 
 .safe-area-overlay > .modal-shell {
