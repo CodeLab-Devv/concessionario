@@ -63,7 +63,7 @@ export const NotificationBell: React.FC = () => {
 
   const removeNotification = async (notification: NotificationRow) => {
     if (!user?.id) return;
-    const confirmed = await showConfirm({ title: 'Elimina notifica', message: `Vuoi eliminare la notifica \"${notification.title}\"?`, confirmText: 'Elimina', cancelText: 'Annulla', type: 'danger', icon: 'delete' });
+    const confirmed = await showConfirm({ title: 'Elimina notifica', message: `Vuoi eliminare la notifica "${notification.title}"?`, confirmText: 'Elimina', cancelText: 'Annulla', type: 'danger', icon: 'delete' });
     if (!confirmed) return;
     const { error } = await supabase.from('notifications').delete().eq('id', notification.id).eq('recipient_id', user.id);
     if (error) { console.error('Errore eliminazione notifica:', error); return; }
