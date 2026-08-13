@@ -1,0 +1,52 @@
+name: fix role save
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch role persistence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/context/AuthContext.tsx')
+          s = p.read_text()
+          old = """      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (error) throw error;
+"""
+          new = """      const { data: updatedRoleRow, error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId)
+        .select('id,role')
+        .single();
+
+      if (error) throw error;
+      if (!updatedRoleRow || updatedRoleRow.role !== newRole) {
+        throw new Error('Il nuovo ruolo non è stato persistito nel database.');
+      }
+
+      setEmployees(prev => prev.map(emp =>
+        emp.id === userId ? { ...emp, role: newRole } : emp
+      ));
+"""
+          if old not in s:
+              raise SystemExit('Expected role update block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit role persistence fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/context/AuthContext.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(auth): verify and persist employee role changes'
+          git push
