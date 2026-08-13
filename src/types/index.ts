@@ -1,9 +1,7 @@
 export type PresenceStatus =
   | 'available'
   | 'inactive'
-  | 'busy'
-  | 'dnd'
-  | 'absent';
+  | 'busy';
 
 export interface User {
   id: string;
@@ -80,7 +78,6 @@ export interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   register: (email: string, password: string, name: string) => Promise<{success: boolean, message?: string, needsEmailConfirmation?: boolean}>;
-
   registerOwner: (email: string, password: string, name: string, ownerKey?: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
