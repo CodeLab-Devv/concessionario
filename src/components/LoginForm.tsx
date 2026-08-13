@@ -63,7 +63,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       if (!result.success) {
         setError(
           result.message ||
-            'Email o password non corretti.',
+            'Email o password non corretti',
         );
       }
     } catch (error: unknown) {
