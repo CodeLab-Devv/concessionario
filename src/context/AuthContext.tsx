@@ -43,23 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const task = (async () => {
       try {
-        let { data } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authUser.id)
-          .maybeSingle();
+        let { data } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
 
         if (!data) {
           console.warn('Utente in Auth ma non in public.users. Generazione profilo automatico...');
           const userEmail = authUser.email || '';
           const userName = authUser.user_metadata?.full_name || userEmail.split('@')[0] || 'Dipendente';
-
           try {
-            const { error: rpcErr } = await supabase.rpc('create_user_profile', {
-              p_id: authUser.id,
-              p_email: userEmail,
-              p_name: userName,
-            });
+            const { error: rpcErr } = await supabase.rpc('create_user_profile', { p_id: authUser.id, p_email: userEmail, p_name: userName });
             if (rpcErr) console.warn('RPC create_user_profile failed, trying direct upsert:', rpcErr);
           } catch (rpcEx) {
             console.warn('RPC create_user_profile exception:', rpcEx);
@@ -83,10 +74,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        if (!data) {
-          console.error('Impossibile recuperare o creare il profilo per l\'utente:', authUser.id);
-          return false;
-        }
+        if (!data) return false;
+
+        const presenceStatus: PresenceStatus =
+          data.presence_status === 'available' || data.presence_status === 'busy'
+            ? data.presence_status
+            : 'inactive';
 
         const userData: User = {
           id: data.id,
@@ -95,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: data.role,
           employeeType: data.employee_type || 'dealer',
           isOnService: data.is_on_service || false,
-          presenceStatus: data.presence_status || (data.is_on_service ? 'available' : 'inactive'),
+          presenceStatus,
           lastServiceStatusChange: data.last_service_status_change,
           createdAt: data.created_at,
           avatar_url: data.avatar_url,
@@ -204,31 +197,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const channel = supabase
       .channel(`presence-user-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'users',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          const row = payload.new as Partial<UserProfileRow>;
-          if (!row.id) return;
-
-          setUser((current) => current ? {
-            ...current,
-            name: row.name ?? current.name,
-            role: row.role ?? current.role,
-            email: row.email ?? current.email,
-            isOnService: row.is_on_service ?? current.isOnService,
-            presenceStatus: row.presence_status ?? current.presenceStatus,
-            lastServiceStatusChange: row.last_service_status_change ?? current.lastServiceStatusChange,
-            avatar_url: row.avatar_url ?? current.avatar_url,
-            availability: row.availability ?? current.availability,
-          } : current);
-        },
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, (payload) => {
+        const row = payload.new as Partial<UserProfileRow>;
+        if (!row.id) return;
+        const nextPresence: PresenceStatus = row.presence_status === 'available' || row.presence_status === 'busy' ? row.presence_status : 'inactive';
+        setUser((current) => current ? {
+          ...current,
+          name: row.name ?? current.name,
+          role: row.role ?? current.role,
+          email: row.email ?? current.email,
+          isOnService: row.is_on_service ?? current.isOnService,
+          presenceStatus: nextPresence,
+          lastServiceStatusChange: row.last_service_status_change ?? current.lastServiceStatusChange,
+          avatar_url: row.avatar_url ?? current.avatar_url,
+          availability: row.availability ?? current.availability,
+        } : current);
+      })
       .subscribe();
 
     return () => {
@@ -239,12 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logActivity = useCallback(async (action: string, details: string, targetUserId?: string) => {
     if (!user) return;
     try {
-      await supabase.rpc('log_activity', {
-        p_user_id: user.id,
-        p_action: action,
-        p_details: details,
-        p_target_user_id: targetUserId || null,
-      });
+      await supabase.rpc('log_activity', { p_user_id: user.id, p_action: action, p_details: details, p_target_user_id: targetUserId || null });
     } catch (error) {
       console.error('Error logging activity:', error);
     }
@@ -255,12 +234,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error('Login error:', error);
-        if (error.message?.includes('Invalid login credentials')) {
-          return { success: false, message: 'Email o password non corretti. Se non hai un account, clicca su Registrati.' };
-        }
-        if (error.message?.includes('Email not confirmed') || error.message?.includes('email_not_confirmed')) {
-          return { success: false, message: 'Email non confermata. Controlla la tua casella email e clicca sul link di conferma.' };
-        }
+        if (error.message?.includes('Invalid login credentials')) return { success: false, message: 'Email o password non corretti. Se non hai un account, clicca su Registrati.' };
+        if (error.message?.includes('Email not confirmed') || error.message?.includes('email_not_confirmed')) return { success: false, message: 'Email non confermata. Controlla la tua casella email e clicca sul link di conferma.' };
         return { success: false, message: error.message || 'Errore durante l\'accesso' };
       }
 
@@ -293,11 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchEmployeesStatus = useCallback(async (): Promise<User[]> => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
       if (error) {
         console.error('Error fetching employees status:', error);
         return [];
@@ -305,6 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const employeesData: User[] = (data || []).map((emp) => {
         const profile = emp as UserProfileRow;
+        const presenceStatus: PresenceStatus = profile.presence_status === 'available' || profile.presence_status === 'busy' ? profile.presence_status : 'inactive';
         return {
           id: profile.id,
           email: profile.email,
@@ -312,7 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: profile.role,
           employeeType: profile.employee_type || undefined,
           isOnService: profile.is_on_service || false,
-          presenceStatus: profile.presence_status || (profile.is_on_service ? 'available' : 'inactive'),
+          presenceStatus,
           lastServiceStatusChange: profile.last_service_status_change || undefined,
           createdAt: profile.created_at,
           avatar_url: profile.avatar_url || undefined,
@@ -333,50 +305,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetUserId) return false;
 
     try {
-      const { data: currentUser, error: fetchError } = await supabase
-        .from('users')
-        .select('is_on_service, presence_status')
-        .eq('id', targetUserId)
-        .single();
-
+      const { data: currentUser, error: fetchError } = await supabase.from('users').select('is_on_service, presence_status').eq('id', targetUserId).single();
       if (fetchError || !currentUser) return false;
 
       const newStatus = !currentUser.is_on_service;
       const nextPresenceStatus: PresenceStatus = newStatus ? 'available' : 'inactive';
 
-      const { error } = await supabase
-        .from('users')
-        .update({
-          is_on_service: newStatus,
-          presence_status: nextPresenceStatus,
-          last_service_status_change: new Date().toISOString(),
-        })
-        .eq('id', targetUserId);
-
+      const { error } = await supabase.from('users').update({ is_on_service: newStatus, presence_status: nextPresenceStatus, last_service_status_change: new Date().toISOString() }).eq('id', targetUserId);
       if (error) throw error;
 
-      const { data: updatedUserData, error: fetchUserError } = await supabase
-        .from('users')
-        .select('name, role')
-        .eq('id', targetUserId)
-        .single();
-
+      const { data: updatedUserData, error: fetchUserError } = await supabase.from('users').select('name, role').eq('id', targetUserId).single();
       if (!fetchUserError && updatedUserData) {
-        sendServiceStatusNotification(updatedUserData.name, newStatus, updatedUserData.role).catch(error => {
-          console.warn('Discord notification failed:', error);
-        });
+        sendServiceStatusNotification(updatedUserData.name, newStatus, updatedUserData.role).catch(error => console.warn('Discord notification failed:', error));
       }
 
-      if (userId) {
-        await fetchEmployeesStatus();
-      } else {
-        setUser(prev => prev ? {
-          ...prev,
-          isOnService: newStatus,
-          presenceStatus: nextPresenceStatus,
-          lastServiceStatusChange: new Date().toISOString(),
-        } : prev);
-      }
+      if (userId) await fetchEmployeesStatus();
+      else setUser(prev => prev ? { ...prev, isOnService: newStatus, presenceStatus: nextPresenceStatus, lastServiceStatusChange: new Date().toISOString() } : prev);
 
       const targetUser = employees.find(emp => emp.id === targetUserId) || user;
       const userName = targetUser?.name || 'Utente sconosciuto';
@@ -389,22 +333,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, employees, fetchEmployeesStatus, logActivity]);
 
   const setPresenceStatus = useCallback(async (status: PresenceStatus): Promise<boolean> => {
-    if (!user?.id) return false;
+    if (!user?.id || !['available', 'inactive', 'busy'].includes(status)) return false;
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ presence_status: status })
-        .eq('id', user.id);
-
+      const { error } = await supabase.from('users').update({ presence_status: status }).eq('id', user.id);
       if (error) throw error;
 
       const statusLabels: Record<PresenceStatus, string> = {
         available: 'Disponibile',
         inactive: 'Inattivo',
         busy: 'Occupato',
-        dnd: 'Non disturbare',
-        absent: 'Assente',
       };
 
       setUser((current) => current ? { ...current, presenceStatus: status } : current);
@@ -420,23 +358,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return false;
     const employeeToFire = employees.find(e => e.id === employeeId);
     if (!employeeToFire || employeeId === user.id) return false;
-
-    if (user.role === 'vice_director') {
-      const restrictedRoles = ['owner', 'director', 'vice_director'];
-      if (restrictedRoles.includes(employeeToFire.role)) return false;
-    }
+    if (user.role === 'vice_director' && ['owner', 'director', 'vice_director'].includes(employeeToFire.role)) return false;
     if (user.role === 'director' && employeeToFire.role === 'owner') return false;
-
-    const authorizedRoles = ['owner', 'director', 'vice_director'];
-    if (!authorizedRoles.includes(user.role)) return false;
+    if (!['owner', 'director', 'vice_director'].includes(user.role)) return false;
 
     try {
       await supabase.from('activity_logs').delete().eq('user_id', employeeId);
       await supabase.from('activity_logs').delete().eq('target_user_id', employeeId);
-
       const { error: dbError } = await supabase.from('users').delete().eq('id', employeeId);
       if (dbError) throw dbError;
-
       const managerName = user.name || 'Manager';
       await logActivity('Licenziamento', `${managerName} ha licenziato ${employeeToFire.name} (${employeeToFire.email}) - Ruolo: ${employeeToFire.role}`, employeeId);
       await fetchEmployeesStatus();
@@ -449,28 +379,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserRole = useCallback(async (userId: string, newRole: 'owner' | 'director' | 'vice_director' | 'employee' | 'probation'): Promise<boolean> => {
     if (!user) return false;
-
     const { data: targetUser, error: fetchError } = await supabase.from('users').select('role').eq('id', userId).single();
     if (fetchError || !targetUser) return false;
-
     const currentRole = targetUser.role;
-    if (user.role === 'vice_director') {
-      if (newRole === 'owner' || newRole === 'director' || currentRole === 'owner' || currentRole === 'director') return false;
-    } else if (user.role === 'director') {
-      if (currentRole === 'owner' || newRole === 'owner') return false;
-    }
+    if (user.role === 'vice_director' && (newRole === 'owner' || newRole === 'director' || currentRole === 'owner' || currentRole === 'director')) return false;
+    if (user.role === 'director' && (currentRole === 'owner' || newRole === 'owner')) return false;
     if (user.id === userId) return false;
 
     try {
       const { error } = await supabase.from('users').update({ role: newRole }).eq('id', userId);
       if (error) throw error;
-
       const managerName = user.name || 'Manager';
       const targetUserName = employees.find(emp => emp.id === userId)?.name || 'Utente sconosciuto';
       const roleLabels = { owner: 'Proprietario', director: 'Direttore', vice_director: 'Vice Direttore', employee: 'Dipendente', probation: 'In Prova' };
-      const oldRoleLabel = roleLabels[currentRole as keyof typeof roleLabels] || currentRole;
-      const newRoleLabel = roleLabels[newRole as keyof typeof roleLabels] || newRole;
-      await logActivity('Cambio Ruolo', `${managerName} ha promosso ${targetUserName} da ${oldRoleLabel} a ${newRoleLabel}`, userId);
+      await logActivity('Cambio Ruolo', `${managerName} ha promosso ${targetUserName} da ${roleLabels[currentRole as keyof typeof roleLabels] || currentRole} a ${roleLabels[newRole as keyof typeof roleLabels] || newRole}`, userId);
       return true;
     } catch (error) {
       console.error('Error updating role:', error);
@@ -484,9 +406,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (authError) {
         console.error('Auth registration error:', authError);
         const msg = authError.message || '';
-        if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('user_already_exists')) {
-          return { success: false, message: 'Questa email è già registrata. Prova a fare il Login.' };
-        }
+        if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('user_already_exists')) return { success: false, message: 'Questa email è già registrata. Prova a fare il Login.' };
         return { success: false, message: authError.message || 'Errore durante la registrazione' };
       }
 
@@ -500,26 +420,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (rpcErr) {
           console.warn('RPC create_user_profile failed, trying direct upsert:', rpcErr);
           const { error: upsertErr } = await supabase.from('users').upsert({ id: authUser.id, email, name, role: 'probation', employee_type: 'dealer', is_on_service: false, presence_status: 'inactive' });
-          if (upsertErr) {
-            console.error('Direct upsert also failed:', upsertErr);
-            profileCreated = false;
-          }
+          if (upsertErr) profileCreated = false;
         }
       } catch (dbErr) {
         console.error('Profile creation error:', dbErr);
         profileCreated = false;
       }
 
-      if (!session) {
-        return { success: true, needsEmailConfirmation: true, message: profileCreated ? 'Registrazione completata! Controlla la tua email e clicca sul link di conferma per attivare l\'account, poi potrai fare il login.' : 'Registrazione completata! Conferma la tua email tramite il link che ti abbiamo inviato, poi potrai accedere. Il tuo profilo utente verrà creato automaticamente al primo accesso.' };
-      }
+      if (!session) return { success: true, needsEmailConfirmation: true, message: profileCreated ? 'Registrazione completata! Controlla la tua email e clicca sul link di conferma per attivare l\'account, poi potrai fare il login.' : 'Registrazione completata! Il tuo profilo utente verrà creato automaticamente al primo accesso.' };
       if (!profileCreated) return { success: true, message: 'Account creato con successo! Il profilo verrà inizializzato al primo accesso. Ora puoi effettuare il login.' };
       return { success: true, message: 'Registrazione completata! Ora puoi accedere.' };
     } catch (error: unknown) {
       console.error('Registration exception:', error);
       const errorMessage = getErrorMessage(error, 'Errore imprevisto durante la registrazione');
-      if (errorMessage.includes('fetch')) return { success: false, message: 'Impossibile connettersi al server. Verifica le credenziali Supabase.' };
-      return { success: false, message: errorMessage };
+      return { success: false, message: errorMessage.includes('fetch') ? 'Impossibile connettersi al server. Verifica le credenziali Supabase.' : errorMessage };
     }
   }, []);
 
@@ -527,13 +441,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { count } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'owner');
       if (count && count > 0) return false;
-
       const { data: { user: authUser }, error: authError } = await supabase.auth.signUp({ email, password });
       if (authError || !authUser) return false;
-
       const { error: dbError } = await supabase.from('users').insert({ id: authUser.id, email: authUser.email || email, name, role: 'owner', employee_type: 'dealer', is_on_service: false, presence_status: 'inactive' });
       if (dbError) return false;
-
       try {
         await supabase.rpc('log_activity', { p_user_id: authUser.id, p_action: 'Registrazione Proprietario', p_details: `Nuovo proprietario registrato: ${name} (${email})`, p_target_user_id: null });
       } catch (logError) {
@@ -547,15 +458,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const resetAllData = useCallback(async (): Promise<boolean> => {
-    if (!user || !['owner', 'director'].includes(user.role)) {
-      console.error('Unauthorized: Only owner and director can reset all data');
-      return false;
-    }
+    if (!user || !['owner', 'director'].includes(user.role)) return false;
     try {
       await logActivity('Reset Totale', `${user.name} ha avviato un reset totale di tutti i dati del concessionario (vendite e log attività)`);
       const { error: batchError } = await supabase.rpc('reset_all_data');
       if (batchError) {
-        console.warn('RPC reset failed, using fallback method:', batchError);
         await supabase.from('activity_logs').delete().not('action', 'eq', 'Reset Totale');
         await supabase.from('sales').delete().gte('created_at', '1900-01-01');
       }
