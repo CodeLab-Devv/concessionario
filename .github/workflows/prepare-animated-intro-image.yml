@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Convert artwork to PNG
+      - name: Convert generated artwork to a real PNG
         shell: bash
         run: |
           if [ -f public/images/animated-intro-car.png ]; then
@@ -28,16 +28,30 @@ jobs:
 
           python -m pip install --disable-pip-version-check --quiet Pillow
           python - <<'PY'
+          from base64 import b64decode
           from pathlib import Path
           from PIL import Image
 
           source = Path('public/images/aurum-recent-sale-car.webp')
           target = Path('public/images/animated-intro-car.png')
+          decoded = Path('/tmp/animated-intro-source.webp')
 
           if not source.exists():
               raise SystemExit(f'Missing source artwork: {source}')
 
-          image = Image.open(source).convert('RGBA')
+          raw = source.read_bytes()
+
+          # The existing generated artwork was committed as base64 text instead of binary.
+          # Decode it before Pillow reads it, without touching the Recent Sales component.
+          if raw.startswith(b'RIFF'):
+              decoded.write_bytes(raw)
+          else:
+              try:
+                  decoded.write_bytes(b64decode(b''.join(raw.split()), validate=True))
+              except Exception as exc:
+                  raise SystemExit(f'Unable to decode existing artwork: {exc}') from exc
+
+          image = Image.open(decoded).convert('RGBA')
           image.thumbnail((1200, 400), Image.Resampling.LANCZOS)
 
           alpha = image.getchannel('A')
@@ -58,5 +72,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/images/animated-intro-car.png
-          git commit -m 'chore: add PNG artwork for AnimatedIntro'
+          git commit -m 'chore: add real PNG artwork for AnimatedIntro'
           git push
