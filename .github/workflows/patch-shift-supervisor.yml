@@ -1,0 +1,65 @@
+name: Patch shift supervisor
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/workflows/patch-shift-supervisor.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: contains(github.event.head_commit.message, '[patch-shift-supervisor]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch ShiftsPage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ShiftsPage.tsx')
+          s = p.read_text()
+
+          replacements = [
+            ("""interface Shift {\n  id: string;\n  user_id: string;\n  shift_date: string;\n  start_time: string;\n  end_time: string;\n  notes: string | null;\n}\n""", """interface Shift {\n  id: string;\n  user_id: string;\n  shift_date: string;\n  start_time: string;\n  end_time: string;\n  notes: string | null;\n  supervisor_id: string | null;\n}\n"""),
+            ("""    userIds: [string, string];\n    start: string;\n    end: string;\n    notes: string;\n""", """    userIds: [string, string];\n    supervisorId: string;\n    start: string;\n    end: string;\n    notes: string;\n"""),
+            ("""    userIds: ['', ''],\n    start: '06:00',\n""", """    userIds: ['', ''],\n    supervisorId: '',\n    start: '06:00',\n"""),
+            ("""            'id,user_id,shift_date,start_time,end_time,notes',\n""", """            'id,user_id,shift_date,start_time,end_time,notes,supervisor_id',\n"""),
+            ("""    setForm({\n      slot: slotKey,\n      userIds: [\n        availableUsers[0]?.id ?? '',\n        availableUsers[1]?.id ?? '',\n      ],\n      start: slot.from,\n""", """    setForm({\n      slot: slotKey,\n      userIds: [\n        availableUsers[0]?.id ?? '',\n        availableUsers[1]?.id ?? '',\n      ],\n      supervisorId: '',\n      start: slot.from,\n"""),
+            ("""      userIds: [\n        pair[0]?.user_id ?? '',\n        pair[1]?.user_id ?? '',\n      ],\n      start:\n""", """      userIds: [\n        pair[0]?.user_id ?? '',\n        pair[1]?.user_id ?? '',\n      ],\n      supervisorId: pair[0]?.supervisor_id ?? '',\n      start:\n"""),
+            ("""          notes:\n            form.notes.trim() || null,\n          created_by: user?.id ?? null,\n""", """          notes:\n            form.notes.trim() || null,\n          created_by: user?.id ?? null,\n          supervisor_id: form.supervisorId || null,\n"""),
+            ("""  const saveShift = async () => {\n    if (!canManage || saving) {\n      return;\n    }\n\n    const [firstUser, secondUser] =\n      form.userIds;\n""", """  const saveShift = async () => {\n    if (!canManage || saving) {\n      return;\n    }\n\n    const [firstUser, secondUser] = form.userIds;\n    const supervisorUser = form.supervisorId ? userMap.get(form.supervisorId) : null;\n\n    if (supervisorUser && !HIGH_ROLES.has(supervisorUser.role)) {\n      showError('Supervisore non valido', 'Il supervisore deve essere Proprietario, Direttore o Vice Direttore.');\n      return;\n    }\n\n    if (form.supervisorId && selectedUsers.includes(form.supervisorId)) {\n      showError('Supervisore non valido', 'Il supervisore deve essere una persona diversa dalla coppia del turno.');\n      return;\n    }\n"""),
+            ("""      setShifts((current) => {\n""", """      setShifts((current) => {\n""", 1),
+            ("""              setForm(\n                      (current) => ({\n                        ...current,\n                        slot: slotKey,\n                        userIds: [\n                          available[0]?.id ??\n                            '',\n                          available[1]?.id ??\n                            '',\n                        ],\n                        start: slot.from,\n""", """              setForm(\n                      (current) => ({\n                        ...current,\n                        slot: slotKey,\n                        userIds: [\n                          available[0]?.id ??\n                            '',\n                          available[1]?.id ??\n                            '',\n                        ],\n                        supervisorId: '',\n                        start: slot.from,\n"""),
+            ("""      <div className=\"mt-5 space-y-4\">\n              {/* SLOT */}\n""", """      <div className=\"mt-5 space-y-4\">\n              {/* SLOT */}\n"""),
+          ]
+
+          for item in replacements:
+              old, new, *rest = item
+              count = rest[0] if rest else -1
+              if old not in s:
+                  if 'selectedUsers.includes' in old:
+                      continue
+                  raise SystemExit(f'Missing expected block: {old[:120]}')
+              s = s.replace(old, new, count)
+
+          supervisor_block = '''\n              {/* SUPERVISOR */}\n              <label className="block">\n                <span className="mb-1.5 block text-sm font-semibold text-gray-700">Supervisore <span className="font-normal text-gray-400">(opzionale)</span></span>\n                <select\n                  value={form.supervisorId}\n                  onChange={(event) => setForm((current) => ({ ...current, supervisorId: event.target.value }))}\n                  className="h-11 w-full rounded-xl border border-gray-200 px-3"\n                >\n                  <option value="">Nessun supervisore</option>\n                  {users\n                    .filter((employee) => HIGH_ROLES.has(employee.role) && !form.userIds.includes(employee.id) && !isUserAbsentInSlot(employee.id, form.slot))\n                    .map((employee) => (\n                      <option key={employee.id} value={employee.id}>\n                        {employee.name} · {ROLE_LABELS[employee.role] ?? employee.role}\n                      </option>\n                    ))}\n                </select>\n              </label>\n'''
+          marker = '''              {/* TIME */}\n'''
+          if supervisor_block.strip() not in s:
+              if marker not in s:
+                  raise SystemExit('TIME marker not found')
+              s = s.replace(marker, supervisor_block + '\n' + marker, 1)
+
+          # Display supervisor under the pair on desktop/mobile.
+          s = s.replace("""                        {absenceRows.length >\n                          0 && (\n""", """                        {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                          <div className=\"mt-2 flex items-center gap-2 text-xs text-gray-600\">\n                            <span className=\"font-semibold\">Supervisore:</span>\n                            <span>{userMap.get(rows[0].supervisor_id)?.name}</span>\n                          </div>\n                        )}\n\n                        {absenceRows.length >\n                          0 && (\n""", 1)
+          s = s.replace("""                  {renderAbsences(\n                    slot.key,\n                  )}\n""", """                  {rows[0]?.supervisor_id && userMap.get(rows[0].supervisor_id) && (\n                    <div className=\"mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800\">\n                      <span className=\"font-semibold\">Supervisore:</span> {userMap.get(rows[0].supervisor_id)?.name}\n                    </div>\n                  )}\n\n                  {renderAbsences(\n                    slot.key,\n                  )}\n""", 1)
+
+          p.write_text(s)
+          PY
+
+          rm .github/workflows/patch-shift-supervisor.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ShiftsPage.tsx .github/workflows/patch-shift-supervisor.yml
+          git commit -m 'feat(shifts): add optional shift supervisor'
+          git push
