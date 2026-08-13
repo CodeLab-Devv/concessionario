@@ -7,7 +7,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variable.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -16,6 +16,47 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
   }
 })
+
+const originalAuthUpdateUser = supabaseClient.auth.updateUser.bind(supabaseClient.auth)
+
+// The application uses fictional/test email addresses. For email changes we use the
+// authenticated Edge Function so the Auth user and public profile are updated immediately,
+// without the confirmation-email flow. All other auth.updateUser calls keep the native behavior.
+supabaseClient.auth.updateUser = async (attributes, options) => {
+  if (!attributes.email) {
+    return originalAuthUpdateUser(attributes, options)
+  }
+
+  const requestedEmail = attributes.email.trim().toLowerCase()
+  if (!requestedEmail) {
+    return originalAuthUpdateUser(attributes, options)
+  }
+
+  const { data, error } = await supabaseClient.functions.invoke('update-own-email', {
+    body: { email: requestedEmail },
+  })
+
+  if (error) return { data: { user: null, session: null }, error }
+  if (!data?.success) {
+    return {
+      data: { user: null, session: null },
+      error: new Error(data?.error || 'Impossibile cambiare email.'),
+    }
+  }
+
+  const { data: refreshedSession, error: refreshError } = await supabaseClient.auth.refreshSession()
+  if (refreshError) return { data: { user: null, session: null }, error: refreshError }
+
+  return {
+    data: {
+      user: refreshedSession.session?.user ?? null,
+      session: refreshedSession.session,
+    },
+    error: null,
+  }
+}
+
+export const supabase = supabaseClient
 
 export type Database = {
   public: {
