@@ -7,7 +7,7 @@ interface AnimatedIntroProps {
 
 const INTRO_DURATION = 2400;
 const EXIT_DURATION = 500;
-const CAR_IMAGE = '/images/aurum-recent-sale-car.webp';
+const CAR_IMAGE = '/images/animated-intro-car.png';
 
 const SPEED_LINES = Array.from({ length: 18 }, (_, index) => ({
   id: index,
