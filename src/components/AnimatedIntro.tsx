@@ -348,7 +348,7 @@ export const AnimatedIntro: React.FC<AnimatedIntroProps> = ({
             <div className="mt-4 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
               <span>Aurum Motors</span>
               <ArrowRight className="h-3 w-3 text-amber-400/70" />
-              <span>Benvenuto</span>
+              <span>Benvenuto!</span>
             </div>
           </div>
         </div>
