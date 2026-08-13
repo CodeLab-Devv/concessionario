@@ -1,5 +1,4 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, UserX, X } from 'lucide-react';
 
 export interface ConfirmDialogProps {
@@ -56,17 +55,11 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     onClose();
   };
 
-  return createPortal(
-    <div className="safe-area-overlay fixed inset-0 z-[10000] overflow-y-auto" role="presentation">
+  return (
+    <div className="safe-area-overlay fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="modal-shell relative z-[10001] w-full max-w-lg transform overflow-y-auto rounded-lg bg-white shadow-2xl sm:my-8"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-dialog-title"
-        >
+        <div className="modal-shell relative w-full max-w-lg transform overflow-y-auto rounded-lg bg-white shadow-xl sm:my-8">
           <button
-            type="button"
             onClick={onClose}
             aria-label="Chiudi"
             className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600 sm:right-4 sm:top-4"
@@ -80,7 +73,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 {getIcon()}
               </div>
               <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
-                <h3 id="confirm-dialog-title" className="text-base font-semibold leading-6 text-gray-900">{title}</h3>
+                <h3 className="text-base font-semibold leading-6 text-gray-900">{title}</h3>
                 <div className="mt-2">
                   <p className="text-sm text-gray-500">{message}</p>
                 </div>
@@ -106,7 +99,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </div>
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 };
