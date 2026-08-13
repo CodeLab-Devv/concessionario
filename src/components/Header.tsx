@@ -1,26 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CircleDot, Power, ChevronDown } from 'lucide-react';
+import { AlertTriangle, CircleDot, Power } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { NotificationBell } from './NotificationBell';
-import type { PresenceStatus } from '../types';
-
-const PRESENCE_META: Record<PresenceStatus, { label: string; dot: string; bg: string; text: string }> = {
-  available: { label: 'Disponibile', dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-800' },
-  inactive: { label: 'Inattivo', dot: 'bg-orange-500', bg: 'bg-orange-50', text: 'text-orange-800' },
-  busy: { label: 'Occupato', dot: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-800' },
-};
 
 export const Header: React.FC = () => {
-  const { user, isAuthenticated, toggleServiceStatus, setPresenceStatus } = useAuth();
+  const { user, isAuthenticated, toggleServiceStatus } = useAuth();
   const [warningCount, setWarningCount] = useState(0);
   const [hasLastChance, setHasLastChance] = useState(false);
   const [isServiceLoading, setIsServiceLoading] = useState(false);
-  const [presenceOpen, setPresenceOpen] = useState(false);
-  const [presenceLoading, setPresenceLoading] = useState(false);
-
-  const currentPresence = user?.presenceStatus || (user?.isOnService ? 'available' : 'inactive');
-  const currentPresenceMeta = PRESENCE_META[currentPresence];
 
   const loadWarnings = useCallback(async () => {
     if (!user?.id) return;
@@ -69,17 +57,6 @@ export const Header: React.FC = () => {
     }
   };
 
-  const handlePresenceChange = async (status: PresenceStatus) => {
-    if (!setPresenceStatus || status === currentPresence || presenceLoading) return;
-    setPresenceLoading(true);
-    try {
-      const success = await setPresenceStatus(status);
-      if (success) setPresenceOpen(false);
-    } finally {
-      setPresenceLoading(false);
-    }
-  };
-
   return (
     <header className="border-b border-slate-200 bg-white/95 shadow-sm">
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-8">
@@ -96,56 +73,6 @@ export const Header: React.FC = () => {
                   <span>{hasLastChance ? 'Last Chance' : `${warningCount} ${warningCount === 1 ? 'richiamo' : 'richiami'}`}</span>
                 </div>
               ) : null}
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPresenceOpen(previous => !previous)}
-                  disabled={presenceLoading}
-                  aria-expanded={presenceOpen}
-                  className={`flex min-h-11 items-center gap-2 rounded-xl border px-2.5 transition sm:px-3 ${currentPresenceMeta.bg} ${currentPresenceMeta.text} border-slate-200 hover:border-slate-300`}
-                  title="Cambia stato"
-                >
-                  <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm">
-                    <span className={`h-3 w-3 rounded-full ${currentPresenceMeta.dot}`} />
-                  </span>
-                  <span className="hidden text-left sm:block">
-                    <span className="block text-[11px] font-bold uppercase tracking-wide">{currentPresenceMeta.label}</span>
-                    <span className="block text-[10px] opacity-60">Stato personale</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${presenceOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {presenceOpen && (
-                  <>
-                    <button type="button" aria-label="Chiudi selezione stato" className="fixed inset-0 z-40 cursor-default" onClick={() => setPresenceOpen(false)} />
-                    <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                      <div className="px-3 py-2">
-                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Stato</p>
-                        <p className="mt-0.5 text-xs text-slate-500">Come su Discord / WhatsApp</p>
-                      </div>
-                      {(Object.keys(PRESENCE_META) as PresenceStatus[]).map(status => {
-                        const meta = PRESENCE_META[status];
-                        const active = status === currentPresence;
-                        return (
-                          <button
-                            key={status}
-                            type="button"
-                            onClick={() => void handlePresenceChange(status)}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
-                          >
-                            <span className={`h-3.5 w-3.5 shrink-0 rounded-full ${meta.dot}`} />
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold text-slate-800">{meta.label}</span>
-                            </span>
-                            {active && <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Attivo</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
 
               <button
                 type="button"
