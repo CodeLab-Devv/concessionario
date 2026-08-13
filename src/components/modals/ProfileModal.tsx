@@ -129,14 +129,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (name !== user.name) updates.name = name;
       if (availability !== (user.availability || '')) updates.availability = availability;
 
-      if (email !== user.email.toLowerCase()) {
+      const changedEmail = email !== user.email.toLowerCase();
+      let emailChangeRequested = false;
+
+      if (changedEmail) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new Error('Inserisci un indirizzo email valido.');
         }
 
-        const { error: emailError } = await supabase.auth.updateUser({ email });
-        if (emailError) throw new Error(`Impossibile cambiare email: ${emailError.message}`);
-        showSuccess('Email aggiornata', 'Il nuovo indirizzo email è stato salvato.');
+        const { error: emailError } = await supabase.auth.updateUser({
+          email,
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        });
+
+        if (emailError) {
+          throw new Error(`Impossibile cambiare email: ${emailError.message}`);
+        }
+
+        emailChangeRequested = true;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -167,10 +179,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }
 
       const changedProfile = Object.keys(updates).length > 0;
-      const changedEmail = email !== user.email.toLowerCase();
       const changedPassword = Boolean(formData.newPassword);
 
-      if (!changedProfile && !changedEmail && !changedPassword) {
+      if (!changedProfile && !emailChangeRequested && !changedPassword) {
         showError('Nessuna modifica', 'Non sono state rilevate modifiche da salvare.');
         return;
       }
@@ -178,12 +189,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       await refreshUserProfile?.();
       setFormData(prev => ({
         ...prev,
-        email: email || user.email,
+        email: emailChangeRequested ? user.email : email,
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       }));
-      showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
+
+      if (emailChangeRequested) {
+        showSuccess(
+          'Conferma richiesta',
+          `Abbiamo inviato una email di conferma a ${email}. L'indirizzo verrà cambiato dopo la conferma.`,
+        );
+      } else {
+        showSuccess('Profilo aggiornato', 'Le modifiche sono state salvate correttamente.');
+      }
     } catch (error) {
       console.error('Profile update error:', error);
       showError('Errore aggiornamento', error instanceof Error ? error.message : 'Errore imprevisto.');
@@ -288,26 +307,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Nome completo</span><div className="relative"><User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required value={formData.name} onChange={event => setFormData(previous => ({ ...previous, name: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
                     <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input required type="email" value={formData.email} onChange={event => setFormData(previous => ({ ...previous, email: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" /></div></label>
                   </div>
+                </section>
 
-                  <div className="mt-4 rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-4"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} /></div>
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:col-span-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-600">Disponibilità</p>
+                  <h4 className="mt-1 text-lg font-bold text-slate-900">Turni e disponibilità</h4>
+                  <div className="mt-5"><AvailabilityEditor value={formData.availability} onChange={availability => setFormData(previous => ({ ...previous, availability }))} /></div>
                 </section>
               </div>
             ) : (
-              <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-600">Protezione</p>
-                <h4 className="mt-1 text-lg font-bold text-slate-900">Sicurezza account</h4>
-                <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><ShieldCheck className="h-4 w-4" /></div><div><p className="text-sm font-semibold text-emerald-900">Account protetto</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Per cambiare password inserisci prima quella attuale.</p></div></div></div>
-                <div className="mt-5 space-y-4">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white"><LockKeyhole className="h-5 w-5" /></div><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Sicurezza</p><h4 className="mt-1 text-lg font-bold text-slate-900">Password account</h4><p className="mt-1 text-sm leading-5 text-slate-500">La password attuale viene verificata prima di applicare quella nuova.</p></div></div>
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
                   {passwordFields.map(({ field, label, visible, toggle, icon: Icon }) => (
-                    <div key={field}><label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label><div className="relative"><Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} minLength={field !== 'currentPassword' ? 6 : undefined} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /><button type="button" onClick={() => toggle(value => !value)} aria-label={visible ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`} className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-slate-400 transition hover:text-slate-700">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                    <label key={field} className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span><div className="relative"><Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={visible ? 'text' : 'password'} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" autoComplete={field === 'currentPassword' ? 'current-password' : 'new-password'} /><button type="button" onClick={() => toggle(previous => !previous)} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200 hover:text-slate-700" aria-label={visible ? 'Nascondi password' : 'Mostra password'}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>
                   ))}
                 </div>
               </section>
             )}
 
-            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
-              <button type="button" onClick={handleClose} className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.99] sm:min-w-36">Annulla</button>
-              <button type="submit" disabled={isLoading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(245,158,11,0.22)] transition hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44">{isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Save className="h-4 w-4" />}{isLoading ? 'Salvataggio...' : 'Salva modifiche'}</button>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button type="button" onClick={handleClose} className="flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Annulla</button>
+              <button type="submit" disabled={isLoading} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 px-6 text-sm font-bold text-white shadow-lg transition hover:from-yellow-600 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4" />{isLoading ? 'Salvataggio...' : 'Salva modifiche'}</button>
             </div>
           </form>
         </main>
