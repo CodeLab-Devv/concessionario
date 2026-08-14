@@ -1,16 +1,41 @@
-/* Auth mobile viewport fix: keep login/register content inside the browser visual viewport. */
+/*
+ * Login/Register mobile viewport fix.
+ * Keep the auth page scrollable in Safari/Chrome and PWA without
+ * applying safe-area offsets to the whole viewport itself.
+ */
+
 @media (max-width: 1023px) {
   main.app-viewport:has(#login-email),
   main.app-viewport:has(input[autocomplete="new-password"]) {
-    min-height: 100svh;
-    min-height: 100dvh;
-    height: auto;
+    height: auto !important;
+    min-height: 100svh !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+
     align-items: flex-start !important;
     justify-content: flex-start !important;
-    overflow-y: auto !important;
+
     overflow-x: hidden !important;
-    padding-top: max(1.25rem, env(safe-area-inset-top)) !important;
-    padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+    overflow-y: auto !important;
+
+    /* Safe area belongs to the content, not to the viewport height. */
+    padding-top: max(1rem, env(safe-area-inset-top)) !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  main.app-viewport:has(#login-email) > .relative.z-10,
+  main.app-viewport:has(input[autocomplete="new-password"]) > .relative.z-10 {
+    flex-shrink: 0;
+    width: 100%;
+  }
+}
+
+/* Standalone PWA: account for the home-indicator without shrinking the page. */
+@media (display-mode: standalone) and (max-width: 1023px) {
+  main.app-viewport:has(#login-email),
+  main.app-viewport:has(input[autocomplete="new-password"]) {
+    padding-top: max(1rem, env(safe-area-inset-top)) !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
   }
 }
 
