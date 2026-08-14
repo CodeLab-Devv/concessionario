@@ -13,7 +13,8 @@ body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-overflow-scrolling: touch;
-  background-color: #070707;
+  background-color: #f8fafc;
+  color: #000000;
 }
 
 .app-viewport {
@@ -22,7 +23,8 @@ body {
   min-height: 100dvh;
   box-sizing: border-box;
   padding-bottom: env(safe-area-inset-bottom);
-  background-color: #070707;
+  background-color: #f8fafc;
+  background-image: none !important;
 }
 
 .app-viewport-height {
@@ -44,7 +46,10 @@ body {
 .safe-area-top { padding-top: max(1rem, env(safe-area-inset-top)); }
 .safe-area-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 .pwa-safe-top { padding-top: env(safe-area-inset-top); }
-.pwa-safe-top-button { top: calc(env(safe-area-inset-top) + 0.75rem); }
+.pwa-safe-top-button {
+  top: calc(env(safe-area-inset-top) + 0.75rem);
+  left: calc(env(safe-area-inset-left) + 0.75rem);
+}
 
 .modal-shell { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overscroll-behavior: contain; }
 @media (min-width: 640px) { .modal-shell { max-height: calc(100vh - 3rem); max-height: calc(100dvh - 3rem); } }
@@ -107,9 +112,6 @@ body {
 .modern-card { background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.8) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
 .modern-card:hover { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15); transform: translateY(-4px); }
 .texture-pattern { background-image: radial-gradient(circle at 25px 25px, rgba(99, 102, 241, 0.1) 2%, transparent 50%), radial-gradient(circle at 75px 75px, rgba(139, 92, 246, 0.1) 2%, transparent 50%); background-size: 100px 100px; }
-
-body { background-color: #070707; color: #000000; }
-[title='Vendita più recente'] { display: none !important; }
 
 @media (max-width: 639px) {
   table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; }
