@@ -212,7 +212,7 @@ export const MainLayout: React.FC = () => {
             onClick={() => setIsSidebarOpen(true)}
             aria-label="Apri menu"
             title="Apri menu"
-            className="mobile-sidebar-trigger absolute left-3 z-40 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur-sm transition-transform active:scale-95 lg:hidden"
+            className="mobile-sidebar-trigger pwa-safe-top-button absolute z-40 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur-sm transition-transform active:scale-95 lg:hidden"
           >
             <Menu className="h-5 w-5" strokeWidth={2.25} />
           </button>
