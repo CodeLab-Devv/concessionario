@@ -9,10 +9,15 @@ body,
   min-height: 100%;
 }
 
+html {
+  background: #f8fafc;
+}
+
 body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-overflow-scrolling: touch;
+  background: #f8fafc;
 }
 
 .app-viewport {
@@ -21,8 +26,9 @@ body {
 }
 
 .app-viewport-height {
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: calc(100dvh + env(safe-area-inset-bottom));
 }
 
 .safe-area-overlay {
@@ -50,6 +56,20 @@ body {
 
 .pwa-safe-top-button {
   top: calc(env(safe-area-inset-top) + 0.75rem);
+}
+
+/* Mobile sidebar trigger: keep it below the Dynamic Island/status area. */
+.mobile-sidebar-trigger {
+  top: calc(env(safe-area-inset-top) + 0.75rem);
+  left: max(0.75rem, env(safe-area-inset-left));
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS/PWA from leaving a white strip below the application viewport. */
+#root {
+  background: #f8fafc;
+  min-height: 100dvh;
 }
 
 .modal-shell {
@@ -172,8 +192,6 @@ body {
     radial-gradient(circle at 75px 75px, rgba(139, 92, 246, 0.1) 2%, transparent 50%);
   background-size: 100px 100px;
 }
-
-body { background-color: #ffffff; color: #000000; }
 
 /* Rimuove esclusivamente l'indicatore grafico della vendita più recente. */
 [title='Vendita più recente'] {
