@@ -1,0 +1,22 @@
+/* Auth mobile viewport fix: keep login/register content inside the browser visual viewport. */
+@media (max-width: 1023px) {
+  main.app-viewport:has(#login-email),
+  main.app-viewport:has(input[autocomplete="new-password"]) {
+    min-height: 100svh;
+    min-height: 100dvh;
+    height: auto;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-top: max(1.25rem, env(safe-area-inset-top)) !important;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  main.app-viewport:has(#login-email),
+  main.app-viewport:has(input[autocomplete="new-password"]) {
+    overflow: hidden;
+  }
+}
