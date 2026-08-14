@@ -17,7 +17,13 @@ export const AnimatedIntro: React.FC<AnimatedIntroProps> = ({ onComplete }) => {
     const end = window.setTimeout(() => setProgress(100), 1450);
     const exit = window.setTimeout(() => setPhase('exit'), INTRO_DURATION);
     const complete = window.setTimeout(onComplete, INTRO_DURATION + EXIT_DURATION);
-    return () => { window.clearTimeout(start); window.clearTimeout(visible); window.clearTimeout(end); window.clearTimeout(exit); window.clearTimeout(complete); };
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(visible);
+      window.clearTimeout(end);
+      window.clearTimeout(exit);
+      window.clearTimeout(complete);
+    };
   }, [onComplete]);
 
   return (
@@ -36,15 +42,14 @@ export const AnimatedIntro: React.FC<AnimatedIntroProps> = ({ onComplete }) => {
           </div>
 
           <div className="relative mx-auto mt-10 h-[230px] w-full max-w-6xl sm:mt-12 sm:h-[330px]">
-            <div className="absolute bottom-10 left-1/2 h-24 w-[82%] -translate-x-1/2 rounded-full bg-amber-400/10 blur-3xl" />
-            <div className="absolute bottom-10 left-1/2 h-px w-full -translate-x-1/2 bg-gradient-to-r from-transparent via-amber-300/80 to-transparent" />
-            <div className="absolute bottom-5 left-1/2 h-px w-[82%] -translate-x-1/2 bg-white/10" />
             <div className="absolute bottom-6 left-1/2 w-[min(92vw,980px)] -translate-x-1/2 opacity-100">
               <div className="relative mx-auto w-fit max-w-full">
-                <div className="pointer-events-none absolute -inset-x-24 top-1/2 h-28 -translate-y-1/2 rounded-full bg-amber-400/10 blur-3xl" />
-                <img src={CAR_IMAGE} alt="Aurum Motors" draggable={false} className="relative block h-auto w-[min(94vw,1000px)] select-none object-contain drop-shadow-[0_25px_55px_rgba(245,158,11,0.18)]" />
-                <div className="pointer-events-none absolute inset-x-[12%] bottom-[7%] h-2 rounded-full bg-amber-300/60 blur-md" />
-                <div className="pointer-events-none absolute inset-x-[8%] bottom-[4%] h-px bg-gradient-to-r from-transparent via-amber-300/90 to-transparent shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
+                <img
+                  src={CAR_IMAGE}
+                  alt="Aurum Motors"
+                  draggable={false}
+                  className="relative block h-auto w-[min(94vw,1000px)] select-none object-contain"
+                />
               </div>
             </div>
           </div>
